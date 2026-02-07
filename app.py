@@ -1,86 +1,116 @@
 import streamlit as st
-from streamlit_gsheets import GSheetsConnection
 import pandas as pd
+import json
+import os
 import datetime
-import plotly.express as px
 
-# --- GOOGLE SHEETS BAĞLANTISI ---
-# 1. Yeni bir Google Sheet oluştur.
-# 2. Paylaş ayarını "Bağlantıya sahip olan herkes düzenleyebilir" yap.
-# 3. Linki aşağıya yapıştır.
-URL = "BURAYA_GOOGLE_SHEETS_LINKINI_YAPISTIR"
+# --- VERİ YÖNETİMİ ---
+DB_FILE = "lgs_master_v4.json"
 
-conn = st.connection("gsheets", type=GSheetsConnection)
+def veri_yukle():
+    if os.path.exists(DB_FILE):
+        with open(DB_FILE, "r", encoding="utf-8") as f: return json.load(f)
+    return {"users": {}, "admin_sifre": "admin123"}
 
-def verileri_cek():
-    try:
-        # Tablodaki 'Kullanicilar' sayfasını oku
-        return conn.read(spreadsheet=URL, worksheet="Kullanicilar")
-    except:
-        return pd.DataFrame(columns=["kullanici", "sifre", "rol", "veri"])
+def veri_kaydet(data):
+    with open(DB_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=4)
 
-def veri_kaydet(df):
-    conn.update(spreadsheet=URL, worksheet="Kullanicilar", data=df)
-    st.cache_data.clear()
+db = veri_yukle()
 
-# --- UYGULAMA MANTIĞI ---
-st.title("🚀 LGS Master - Bulut Veritabanı")
+# --- OTURUM ---
+if "user" not in st.session_state: st.session_state.user = None
+if "role" not in st.session_state: st.session_state.role = None
 
-if "user" not in st.session_state:
-    st.session_state.user = None
-
-# Giriş ve Kayıt İşlemleri
-df_users = verileri_cek()
-
+# --- GİRİŞ EKRANI ---
 if st.session_state.user is None:
-    tab1, tab2 = st.tabs(["Giriş Yap", "Yeni Öğrenci Kaydı"])
+    st.title("🚀 LGS Master Web Pro")
+    t1, t2, t3 = st.tabs(["Öğrenci Girişi", "Öğretmen Girişi", "Yeni Kayıt"])
     
-    with tab1:
-        u = st.text_input("Kullanıcı Adı")
-        p = st.text_input("Şifre", type="password")
-        if st.button("Giriş"):
-            user_row = df_users[(df_users["kullanici"] == u) & (df_users["sifre"] == p)]
-            if not user_row.empty:
-                st.session_state.user = u
-                st.session_state.role = user_row.iloc[0]["rol"]
+    with t1:
+        u = st.text_input("Kullanıcı Adı", key="u_login")
+        p = st.text_input("Şifre", type="password", key="p_login")
+        if st.button("Giriş Yap"):
+            if u in db["users"] and db["users"][u]["password"] == p:
+                st.session_state.user, st.session_state.role = u, "student"
                 st.rerun()
             else: st.error("Hatalı bilgiler!")
 
-    with tab2:
-        new_u = st.text_input("Yeni Kullanıcı Adı")
-        new_p = st.text_input("Şifre Belirle", type="password")
+    with t2:
+        ap = st.text_input("Öğretmen Şifresi", type="password", key="admin_p")
+        if st.button("Yönetici Girişi"):
+            if ap == db["admin_sifre"]:
+                st.session_state.user, st.session_state.role = "Admin", "teacher"
+                st.rerun()
+            else: st.error("Şifre Yanlış!")
+
+    with t3:
+        nu = st.text_input("Yeni Kullanıcı Adı")
+        np = st.text_input("Şifre Belirle", type="password")
         if st.button("Kayıt Ol"):
-            if new_u in df_users["kullanici"].values:
-                st.warning("Bu kullanıcı zaten var.")
-            else:
-                new_data = pd.DataFrame([{"kullanici": new_u, "sifre": new_p, "rol": "student", "veri": "{}"}])
-                df_users = pd.concat([df_users, new_data], ignore_index=True)
-                veri_kaydet(df_users)
-                st.success("Kayıt tamam! Giriş yapabilirsin.")
+            if nu and np and nu not in db["users"]:
+                db["users"][nu] = {"password": np, "sorular": [], "denemeler": [], "kitaplar": [], "odevler": []}
+                veri_kaydet(db); st.success("Kayıt Başarılı!")
 
+# --- SİSTEM İÇERİĞİ ---
 else:
-    st.sidebar.success(f"Giriş yapıldı: {st.session_state.user}")
-    if st.sidebar.button("Çıkış"):
-        st.session_state.user = None
-        st.rerun()
+    st.sidebar.title(f"👤 {st.session_state.user}")
+    if st.sidebar.button("Güvenli Çıkış"):
+        st.session_state.user = None; st.rerun()
 
-    # --- ÖĞRENCİ PANELİ ---
     if st.session_state.role == "student":
-        st.subheader("📊 Çalışma Paneli")
-        
-        # 3 Yanlış 1 Doğruyu Götürür Hesaplaması
-        st.write("### Deneme Net Hesapla")
-        c1, c2 = st.columns(2)
-        d = c1.number_input("Doğru", 0)
-        y = c2.number_input("Yanlış", 0)
-        net = d - (y / 3)
-        st.metric("Netiniz", round(net, 2))
-        
-        if st.button("Neti Buluta Kaydet"):
-            st.info("Veri doğrudan Google Sheets'e iletildi.")
+        u_data = db["users"][st.session_state.user]
+        m = st.sidebar.radio("Menü", ["Soru Girişi", "Deneme Sınavı", "Kitap Okuma", "Gelişim & Ödev"])
 
-    # --- ÖĞRETMEN PANELİ ---
+        if m == "Soru Girişi":
+            st.header("📝 Günlük Soru Takibi")
+            drs = st.selectbox("Ders", ["Matematik", "Türkçe", "Fen", "İnkılap", "İngilizce", "Din"])
+            kn = st.text_input("Konu Adı")
+            c1, c2, c3 = st.columns(3)
+            do = c1.number_input("Doğru", 0); ya = c2.number_input("Yanlış", 0); bo = c3.number_input("Boş", 0)
+            if st.button("Kaydet"):
+                u_data["sorular"].append({"t": str(datetime.date.today()), "d": drs, "k": kn, "do": do, "ya": ya, "bo": bo})
+                veri_kaydet(db); st.success("Soru Kaydedildi!")
+
+        elif m == "Deneme Sınavı":
+            st.header("📊 Deneme Sonuç Girişi")
+            yay = st.text_input("Yayın Adı")
+            st.write("---")
+            deneme_verisi = {}
+            toplam_net = 0
+            
+            dersler = ["Türkçe", "Matematik", "Fen", "İnkılap", "Din", "İngilizce"]
+            for d in dersler:
+                st.write(f"**{d}**")
+                c1, c2 = st.columns(2)
+                d_do = c1.number_input(f"{d} Doğru", 0, key=f"{d}d")
+                d_ya = c2.number_input(f"{d} Yanlış", 0, key=f"{d}y")
+                d_net = d_do - (d_ya / 3)
+                toplam_net += d_net
+                deneme_verisi[d] = {"d": d_do, "y": d_ya, "net": round(d_net, 2)}
+            
+            st.metric("Toplam Hesaplanan Net", round(toplam_net, 2))
+            if st.button("Tüm Denemeyi Kaydet"):
+                u_data["denemeler"].append({"t": str(datetime.date.today()), "y": yay, "detay": deneme_verisi, "toplam": round(toplam_net, 2)})
+                veri_kaydet(db); st.success("Deneme Başarıyla Kaydedildi!")
+
+        elif m == "Kitap Okuma":
+            st.header("📚 Kitap Takibi")
+            kad = st.text_input("Kitap Adı"); yz = st.text_input("Yazar"); sy = st.number_input("Sayfa Sayısı", 0)
+            bt = st.date_input("Başlangıç"); bitt = st.date_input("Bitiş")
+            if st.button("Kitabı Ekle"):
+                u_data["kitaplar"].append({"ad": kad, "yz": yz, "s": sy, "b": str(bt), "bit": str(bitt)})
+                veri_kaydet(db); st.success("Kitap Kaydedildi!")
+
     elif st.session_state.role == "teacher":
-        st.subheader("👨‍🏫 Öğretmen Yönetim Alanı")
-        st.write("Öğrenci Listesi (Buluttan Canlı):")
-        st.dataframe(df_users[df_users["rol"] == "student"])
+        st.header("👨‍🏫 Öğretmen Paneli")
+        # Tüm öğrencileri listele ve takip et
+        ogrenciler = list(db["users"].keys())
+        secilen = st.selectbox("Öğrenci Seçin", ogrenciler)
+        if secilen:
+            st.subheader(f"{secilen} Performansı")
+            # Burada ödev verme ve analiz kısımları yer alacak
+            odev = st.text_area("Ödev/Hedef Belirle")
+            if st.button("Gönder"):
+                db["users"][secilen]["odevler"].append(odev)
+                veri_kaydet(db); st.success("Ödev Gönderildi!")
