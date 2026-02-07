@@ -7,14 +7,14 @@ import plotly.express as px
 from fpdf import FPDF
 
 # --- AYARLAR ---
-DB_FILE = "lgs_master_v12.json"
+DB_FILE = "lgs_master_v13.json"
 LGS_TARIHI = datetime.datetime(2026, 6, 14, 9, 30)
 DERSLER_KONULAR = {
     "Turkce": ["Paragraf", "Sozcukte Anlam", "Cumlede Anlam", "Fiilimsiler", "Cumlenin Ogeleri"],
     "Matematik": ["Carpanlar ve Katlar", "Uslu Ifadeler", "Karekoklu Ifadeler", "Veri Analizi", "Olasilik"],
     "Fen": ["Mevsimler ve Iklim", "DNA ve Genetik Kod", "Basinc", "Madde ve Endustri"],
     "Inkilap": ["Bir Kahraman Doguyor", "Milli Uyanis", "Milli Destan"],
-    "Din": ["Kader İnancı", "Zekat ve Sadaka", "Din ve Hayat"],
+    "Din": ["Kader Inanci", "Zekat ve Sadaka", "Din ve Hayat"],
     "Ingilizce": ["Friendship", "Teen Life", "In The Kitchen"]
 }
 
@@ -39,69 +39,64 @@ def generate_pdf_bytes(user_name, user_data):
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Helvetica", 'B', 16)
-    pdf.cell(190, 10, tr_fix(f"LGS DENEME VE PERFORMANS KARNESI: {user_name.upper()}"), ln=True, align='C')
+    pdf.cell(190, 10, tr_fix(f"LGS GELISIM VE PERFORMANS KARNESI: {user_name.upper()}"), ln=True, align='C')
     pdf.ln(5)
 
-    # 1. DENEME ANALİZ BÖLÜMÜ (YENİ)
-    pdf.set_font("Helvetica", 'B', 13)
-    pdf.set_text_color(255, 0, 0)
-    pdf.cell(190, 10, "AYRINTILI DENEME ANALIZI", ln=True)
+    # 1. TÜM DENEMELERİN KIYASLAMALI TABLOSU
+    pdf.set_font("Helvetica", 'B', 12)
+    pdf.set_text_color(0, 51, 102)
+    pdf.cell(190, 10, "DENEME SINAVLARI GELISIM TABLOSU", ln=True)
     pdf.set_text_color(0, 0, 0)
     
     if user_data["denemeler"]:
-        last_d = user_data["denemeler"][-1]
-        pdf.set_font("Helvetica", 'B', 10)
-        pdf.cell(190, 8, tr_fix(f"Son Sınav: {last_d['y']} ({last_d['t']}) | Toplam Net: {last_d['top']}"), ln=True)
-        
-        # Deneme Tablosu
-        pdf.set_fill_color(230, 230, 230)
+        pdf.set_fill_color(220, 220, 220)
         pdf.set_font("Helvetica", 'B', 9)
-        pdf.cell(45, 8, "Ders Adi", 1, 0, 'C', True)
-        pdf.cell(25, 8, "Dogru", 1, 0, 'C', True)
-        pdf.cell(25, 8, "Yanlis", 1, 0, 'C', True)
-        pdf.cell(25, 8, "Bos", 1, 0, 'C', True)
-        pdf.cell(25, 8, "Net", 1, 1, 'C', True)
+        pdf.cell(30, 8, "Tarih", 1, 0, 'C', True)
+        pdf.cell(60, 8, "Yayinevi", 1, 0, 'C', True)
+        pdf.cell(30, 8, "Toplam Net", 1, 0, 'C', True)
+        pdf.cell(30, 8, "Fark (+/-)", 1, 1, 'C', True)
         
         pdf.set_font("Helvetica", '', 9)
-        for ders, skor in last_d["detay"].items():
-            pdf.cell(45, 7, tr_fix(ders), 1)
-            pdf.cell(25, 7, str(skor['d']), 1, 0, 'C')
-            pdf.cell(25, 7, str(skor['y']), 1, 0, 'C')
-            pdf.cell(25, 7, str(skor['b']), 1, 0, 'C')
-            pdf.cell(25, 7, str(skor['net']), 1, 1, 'C')
+        prev_net = None
+        for d in user_data["denemeler"]:
+            current_net = d['top']
+            fark = f"{round(current_net - prev_net, 2)}" if prev_net is not None else "-"
+            pdf.cell(30, 7, d['t'], 1, 0, 'C')
+            pdf.cell(60, 7, tr_fix(d['y']), 1)
+            pdf.cell(30, 7, str(current_net), 1, 0, 'C')
+            pdf.cell(30, 7, str(fark), 1, 1, 'C')
+            prev_net = current_net
     else:
-        pdf.cell(190, 10, "Henuz deneme verisi girilmemis.", ln=True)
+        pdf.cell(190, 10, "Deneme verisi bulunamadi.", ln=True)
 
-    # 2. SORU TAKİP TABLOSU
+    # 2. OKUNAN KİTAPLAR (SAYFA SAYISI DAHİL)
     pdf.ln(5)
     pdf.set_font("Helvetica", 'B', 12)
-    pdf.cell(190, 10, "GÜNLÜK SORU COZUM DETAYLARI", ln=True)
-    pdf.set_font("Helvetica", 'B', 8)
-    pdf.set_fill_color(200, 220, 255)
-    heads = [("Tarih",25), ("Brans",30), ("Konu",65), ("D",12), ("Y",12), ("B",12), ("Toplam",34)]
-    for h in heads: pdf.cell(h[1], 8, h[0], 1, 0, 'C', True)
-    pdf.ln()
+    pdf.cell(190, 10, "OKUNAN KITAPLAR VE SAYFA SAYILARI", ln=True)
+    pdf.set_font("Helvetica", 'B', 9)
+    pdf.set_fill_color(240, 240, 240)
+    pdf.cell(80, 8, "Kitap Adi", 1, 0, 'C', True)
+    pdf.cell(50, 8, "Yazar", 1, 0, 'C', True)
+    pdf.cell(30, 8, "Sayfa", 1, 0, 'C', True)
+    pdf.cell(30, 8, "Bitis", 1, 1, 'C', True)
     
-    pdf.set_font("Helvetica", '', 7)
-    for s in user_data["sorular"][-15:]:
-        pdf.cell(25, 6, str(s['t']), 1)
-        pdf.cell(30, 6, tr_fix(s['d']), 1)
-        pdf.cell(65, 6, tr_fix(s['k'][:35]), 1)
-        pdf.cell(12, 6, str(s['do']), 1, 0, 'C')
-        pdf.cell(12, 6, str(s['ya']), 1, 0, 'C')
-        pdf.cell(12, 6, str(s['bo']), 1, 0, 'C')
-        pdf.cell(34, 6, str(int(s['do'])+int(s['ya'])+int(s['bo'])), 1, 1, 'C')
+    pdf.set_font("Helvetica", '', 8)
+    for k in user_data["kitaplar"]:
+        pdf.cell(80, 7, tr_fix(k['ad']), 1)
+        pdf.cell(50, 7, tr_fix(k['yz']), 1)
+        pdf.cell(30, 7, str(k['s']), 1, 0, 'C')
+        pdf.cell(30, 7, k['bit'], 1, 1, 'C')
 
     return bytes(pdf.output())
 
-# --- PROGRAM ARAYÜZÜ ---
+# --- PROGRAM ---
 if "user" not in st.session_state: st.session_state.user = None
 
 if st.session_state.user is None:
-    st.title("🛡️ LGS Master Pro")
+    st.title("🏆 LGS Master Pro")
     t1, t2 = st.tabs(["Öğrenci Girişi", "Öğretmen Girişi"])
     with t1:
-        u, p = st.text_input("Kullanıcı Adı", key="u"), st.text_input("Şifre", type="password", key="p")
+        u, p = st.text_input("Kullanıcı", key="u"), st.text_input("Şifre", type="password", key="p")
         if st.button("Giriş"):
             if u in db["users"] and db["users"][u]["password"] == p:
                 st.session_state.user, st.session_state.role = u, "student"; st.rerun()
@@ -111,73 +106,62 @@ if st.session_state.user is None:
             if ap == db["admin_sifre"]:
                 st.session_state.user, st.session_state.role = "Admin", "teacher"; st.rerun()
 else:
-    # Sidebar - Geri Sayım
     kalan = LGS_TARIHI - datetime.datetime.now()
-    st.sidebar.error(f"⏳ LGS'ye {kalan.days} Gün Kaldı")
-    if st.sidebar.button("Güvenli Çıkış"): st.session_state.user = None; st.rerun()
+    st.sidebar.warning(f"⏳ LGS: {kalan.days} Gün")
+    if st.sidebar.button("Çıkış"): st.session_state.user = None; st.rerun()
 
-    def data_entry(user_id):
-        uv = db["users"][user_id]
-        tab1, tab2, tab3 = st.tabs(["Soru Girişi", "Deneme Girişi", "Kitap Takibi"])
-        with tab1:
-            t = st.date_input("Tarih", datetime.date.today(), key=f"t_{user_id}")
-            dr = st.selectbox("Ders", list(DERSLER_KONULAR.keys()), key=f"d_{user_id}")
-            ko = st.selectbox("Konu", DERSLER_KONULAR[dr], key=f"k_{user_id}")
+    def forms(uid):
+        uv = db["users"][uid]
+        t1, t2, t3 = st.tabs(["Soru", "Deneme", "Kitap"])
+        with t1:
+            tar = st.date_input("Tarih", datetime.date.today(), key=f"t_{uid}")
+            dr = st.selectbox("Ders", list(DERSLER_KONULAR.keys()), key=f"d_{uid}")
+            ko = st.selectbox("Konu", DERSLER_KONULAR[dr], key=f"k_{uid}")
             c1,c2,c3 = st.columns(3)
-            do, ya, bo = c1.number_input("D",0,key=f"do_{user_id}"), c2.number_input("Y",0,key=f"ya_{user_id}"), c3.number_input("B",0,key=f"bo_{user_id}")
-            if st.button("Kaydet", key=f"s_{user_id}"):
-                uv["sorular"].append({"t": str(t), "d": dr, "k": ko, "do": do, "ya": ya, "bo": bo})
+            do, ya, bo = c1.number_input("D",0,key=f"do_{uid}"), c2.number_input("Y",0,key=f"ya_{uid}"), c3.number_input("B",0,key=f"bo_{uid}")
+            if st.button("Soru Kaydet", key=f"s_{uid}"):
+                uv["sorular"].append({"t": str(tar), "d": dr, "k": ko, "do": do, "ya": ya, "bo": bo})
                 veri_kaydet(db); st.success("Kaydedildi!")
-        with tab2:
-            st.write("### Deneme Analiz Formu")
-            yay = st.text_input("Yayın/Deneme Adı", key=f"y_{user_id}")
-            d_tarih = st.date_input("Deneme Tarihi", datetime.date.today(), key=f"dt_{user_id}")
-            d_sonuc = {}; top_net = 0
+        with t2:
+            yay = st.text_input("Yayın", key=f"y_{uid}")
+            dt = st.date_input("Tarih", datetime.date.today(), key=f"dt_{uid}")
+            d_res = {}; t_net = 0
             for ds in DERSLER_KONULAR.keys():
                 st.write(f"**{ds}**")
-                col1, col2, col3 = st.columns(3)
-                dd = col1.number_input("Doğru", 0, key=f"{ds}d_{user_id}")
-                dy = col2.number_input("Yanlış", 0, key=f"{ds}y_{user_id}")
-                db_ = col3.number_input("Boş", 0, key=f"{ds}b_{user_id}")
-                n = round(dd - (dy * 0.33), 2)
-                top_net += n
-                d_sonuc[ds] = {"d": dd, "y": dy, "b": db_, "net": n}
-            st.metric("Toplam Net", round(top_net, 2))
-            if st.button("Denemeyi Kaydet", key=f"db_{user_id}"):
-                uv["denemeler"].append({"t": str(d_tarih), "y": yay, "top": round(top_net, 2), "detay": d_sonuc})
-                veri_kaydet(db); st.success("Deneme sisteme işlendi!")
-        with tab3:
-            st.write("### Kitap Okuma")
-            kad = st.text_input("Kitap", key=f"ka_{user_id}")
-            yz = st.text_input("Yazar", key=f"yz_{user_id}")
-            c1,c2 = st.columns(2)
-            bt, bit = c1.date_input("Başlama", key=f"bt_{user_id}"), c2.date_input("Bitiş", key=f"bit_{user_id}")
-            if st.button("Kitap Kaydet", key=f"kb_{user_id}"):
-                uv["kitaplar"].append({"ad": kad, "yz": yz, "b": str(bt), "bit": str(bit)})
+                co1, co2, co3 = st.columns(3)
+                d_do, d_ya, d_bo = co1.number_input("D",0,key=f"{ds}d_{uid}"), co2.number_input("Y",0,key=f"{ds}y_{uid}"), co3.number_input("B",0,key=f"{ds}b_{uid}")
+                n = round(d_do - (d_ya * 0.33), 2)
+                t_net += n
+                d_res[ds] = {"d": d_do, "y": d_ya, "b": d_bo, "net": n}
+            st.metric("Toplam Net", round(t_net, 2))
+            if st.button("Deneme Kaydet", key=f"db_{uid}"):
+                uv["denemeler"].append({"t": str(dt), "y": yay, "top": round(t_net, 2), "detay": d_res})
+                # Tarihe göre sırala ki farklar doğru çıksın
+                uv["denemeler"] = sorted(uv["denemeler"], key=lambda x: x["t"])
+                veri_kaydet(db); st.success("Deneme eklendi!")
+        with t3:
+            kad = st.text_input("Kitap", key=f"ka_{uid}")
+            kyz = st.text_input("Yazar", key=f"ky_{uid}")
+            ksy = st.number_input("Sayfa Sayısı", 0, key=f"ks_{uid}")
+            b, bit = st.date_input("Başlama", key=f"b_{uid}"), st.date_input("Bitiş", key=f"bit_{uid}")
+            if st.button("Kitap Kaydet", key=f"kb_{uid}"):
+                uv["kitaplar"].append({"ad": kad, "yz": kyz, "s": ksy, "b": str(b), "bit": str(bit)})
                 veri_kaydet(db); st.success("Kitap eklendi!")
 
     if st.session_state.role == "student":
-        data_entry(st.session_state.user)
+        forms(st.session_state.user)
     else:
-        m = st.sidebar.radio("Menü", ["Kayıt", "Veri Girişi", "Kaynak Atama", "Analiz & PDF"])
+        m = st.sidebar.radio("Menü", ["Kayıt", "Veri Girişi", "Raporlar"])
         if m == "Kayıt":
             nu, np = st.text_input("Kullanıcı"), st.text_input("Şifre")
-            if st.button("Öğrenciyi Kaydet"):
+            if st.button("Öğrenci Ekle"):
                 db["users"][nu] = {"password": np, "sorular": [], "denemeler": [], "kitaplar": [], "kaynaklar": []}
-                veri_kaydet(db); st.success("Öğrenci tanımlandı.")
+                veri_kaydet(db); st.success("Eklendi.")
         elif m == "Veri Girişi":
-            s_o = st.selectbox("Öğrenci", list(db["users"].keys()))
-            if s_o: data_entry(s_o)
-        elif m == "Kaynak Atama":
-            s_k = st.selectbox("Öğrenci Seç", list(db["users"].keys()))
-            d_k = st.selectbox("Ders", list(DERSLER_KONULAR.keys()))
-            kn_k = st.selectbox("Konu", DERSLER_KONULAR[d_k])
-            kay = st.text_input("Kaynak Adı")
-            if st.button("Ata"):
-                db["users"][s_k]["kaynaklar"].append({"d": d_k, "k": kn_k, "ad": kay})
-                veri_kaydet(db); st.success("Kaynak atandı.")
-        elif m == "Analiz & PDF":
-            s_r = st.selectbox("Öğrenci Seç", list(db["users"].keys()))
-            if s_r:
-                p_bytes = generate_pdf_bytes(s_r, db["users"][s_r])
-                st.download_button("📄 Detaylı Analiz PDF'ini İndir", p_bytes, f"{s_r}_Karne.pdf", "application/pdf")
+            so = st.selectbox("Öğrenci", list(db["users"].keys()))
+            if so: forms(so)
+        elif m == "Raporlar":
+            sr = st.selectbox("Öğrenci", list(db["users"].keys()))
+            if sr:
+                p_out = generate_pdf_bytes(sr, db["users"][sr])
+                st.download_button("📄 Gelişim Analizli PDF İndir", p_out, f"{sr}_Analiz.pdf", "application/pdf")
