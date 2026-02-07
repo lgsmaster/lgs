@@ -8,7 +8,7 @@ import plotly.express as px
 # 1. Yeni bir Google Sheet oluştur.
 # 2. Paylaş ayarını "Bağlantıya sahip olan herkes düzenleyebilir" yap.
 # 3. Linki aşağıya yapıştır.
-URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ2_clZjAKQ-xh9mk7j84LT8juDIDY-4bXbvgPa8MN3SQgsxOO11aVBLlOdzgMR4yHLpcOLoZSQlDAX/pubhtml"
+URL = "BURAYA_GOOGLE_SHEETS_LINKINI_YAPISTIR"
 
 conn = st.connection("gsheets", type=GSheetsConnection)
 
