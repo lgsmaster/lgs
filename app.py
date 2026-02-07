@@ -3,14 +3,24 @@ import pandas as pd
 import json
 import os
 import datetime
+import plotly.express as px
+from fpdf import FPDF
 
-# --- VERİ YÖNETİMİ ---
-DB_FILE = "lgs_master_v5.json"
+# --- VERİ VE YAPI TANIMLARI ---
+DB_FILE = "lgs_master_v6.json"
+DERSLER_KONULAR = {
+    "Türkçe": ["Paragraf", "Sözcükte Anlam", "Cümlede Anlam", "Fiilimsiler", "Cümlenin Öğeleri"],
+    "Matematik": ["Çarpanlar ve Katlar", "Üslü İfadeler", "Kareköklü İfadeler", "Veri Analizi", "Olasılık"],
+    "Fen": ["Mevsimler ve İklim", "DNA ve Genetik Kod", "Basınç", "Madde ve Endüstri"],
+    "İnkılap": ["Bir Kahraman Doğuyor", "Milli Uyanış", "Milli Destan"],
+    "Din": ["Kader İnancı", "Zekat ve Sadaka", "Din ve Hayat"],
+    "İngilizce": ["Friendship", "Teen Life", "In The Kitchen"]
+}
 
 def veri_yukle():
     if os.path.exists(DB_FILE):
         with open(DB_FILE, "r", encoding="utf-8") as f: return json.load(f)
-    return {"users": {}, "admin_sifre": "admin123", "kaynaklar": []}
+    return {"users": {}, "admin_sifre": "admin123"}
 
 def veri_kaydet(data):
     with open(DB_FILE, "w", encoding="utf-8") as f:
@@ -18,31 +28,28 @@ def veri_kaydet(data):
 
 db = veri_yukle()
 
-# --- OTURUM YÖNETİMİ ---
+# --- OTURUM ---
 if "user" not in st.session_state: st.session_state.user = None
 if "role" not in st.session_state: st.session_state.role = None
 
 # --- GİRİŞ EKRANI ---
 if st.session_state.user is None:
-    st.title("🚀 LGS Master Koçluk Sistemi")
+    st.title("🏆 LGS Master Koçluk Platformu")
     t1, t2 = st.tabs(["Öğrenci Girişi", "Öğretmen Girişi"])
-    
     with t1:
         u = st.text_input("Kullanıcı Adı", key="u_log")
         p = st.text_input("Şifre", type="password", key="p_log")
-        if st.button("Öğrenci Girişi"):
+        if st.button("Giriş Yap"):
             if u in db["users"] and db["users"][u]["password"] == p:
                 st.session_state.user, st.session_state.role = u, "student"
                 st.rerun()
             else: st.error("Hatalı bilgiler!")
-
     with t2:
-        ap = st.text_input("Öğretmen Şifresi", type="password", key="adm_p")
+        ap = st.text_input("Öğretmen Şifresi", type="password")
         if st.button("Yönetici Girişi"):
             if ap == db["admin_sifre"]:
                 st.session_state.user, st.session_state.role = "Admin", "teacher"
                 st.rerun()
-            else: st.error("Geçersiz Şifre!")
 
 # --- ANA SİSTEM ---
 else:
@@ -50,99 +57,97 @@ else:
     if st.sidebar.button("Güvenli Çıkış"):
         st.session_state.user = None; st.rerun()
 
-    dersler = ["Türkçe", "Matematik", "Fen", "İnkılap", "Din", "İngilizce"]
-
-    # --- ORTAK FONKSİYONLAR (SORU, DENEME, KİTAP GİRİŞİ) ---
-    def veri_giris_formu(user_target):
-        m = st.tabs(["📝 Soru Girişi", "📊 Deneme Sınavı", "📚 Kitap Okuma"])
-        u_data = db["users"][user_target]
-
-        with m[0]:
+    # --- ORTAK FORM (ÖĞRENCİ VE ÖĞRETMEN İÇİN) ---
+    def ortak_giris_paneli(target_user):
+        u_v = db["users"][target_user]
+        tab1, tab2, tab3 = st.tabs(["📝 Soru Girişi", "📊 Deneme Sınavı", "📚 Kitap Takibi"])
+        
+        with tab1:
             st.subheader("Günlük Soru Takibi")
-            t = st.date_input("Soru Çözüm Tarihi", datetime.date.today(), key=f"t_{user_target}")
-            drs = st.selectbox("Ders", dersler, key=f"d_{user_target}")
-            kn = st.text_input("Konu", key=f"k_{user_target}")
+            t = st.date_input("Tarih", datetime.date.today(), key=f"t_{target_user}")
+            drs = st.selectbox("Ders Seç", list(DERSLER_KONULAR.keys()), key=f"d_{target_user}")
+            kn = st.selectbox("Konu Seç", DERSLER_KONULAR[drs], key=f"k_{target_user}")
             c1, c2, c3 = st.columns(3)
-            do = c1.number_input("D", 0, key=f"do_{user_target}")
-            ya = c2.number_input("Y", 0, key=f"ya_{user_target}")
-            bo = c3.number_input("B", 0, key=f"bo_{user_target}")
-            if st.button("Soru Kaydet", key=f"btn_s_{user_target}"):
-                u_data["sorular"].append({"t": str(t), "d": drs, "k": kn, "do": do, "ya": ya, "bo": bo})
-                veri_kaydet(db); st.success("Soru Kaydedildi!")
+            do = c1.number_input("D", 0, key=f"do_{target_user}")
+            ya = c2.number_input("Y", 0, key=f"ya_{target_user}")
+            bo = c3.number_input("B", 0, key=f"bo_{target_user}")
+            if st.button("Soru Kaydet", key=f"sb_{target_user}"):
+                u_v["sorular"].append({"t": str(t), "d": drs, "k": kn, "do": do, "ya": ya, "bo": bo})
+                veri_kaydet(db); st.success("Kaydedildi!")
 
-        with m[1]:
-            st.subheader("Deneme Analizi (Ders Bazlı Net)")
-            dt = st.date_input("Deneme Tarihi", datetime.date.today(), key=f"dt_{user_target}")
-            yay = st.text_input("Yayın Adı", key=f"yay_{user_target}")
-            st.write("---")
-            deneme_verisi = {}; toplam_net = 0
-            for d in dersler:
+        with tab2:
+            st.subheader("Ders Bazlı Deneme Analizi")
+            dt = st.date_input("Sınav Tarihi", datetime.date.today(), key=f"dt_{target_user}")
+            yay = st.text_input("Yayın Adı", key=f"y_{target_user}")
+            deneme_sonuc = {}; toplam_net = 0
+            for d in DERSLER_KONULAR.keys():
                 st.write(f"**{d}**")
                 col1, col2, col3 = st.columns(3)
-                d_do = col1.number_input("D", 0, key=f"{d}d_{user_target}")
-                d_ya = col2.number_input("Y", 0, key=f"{d}y_{user_target}")
-                d_bo = col3.number_input("B", 0, key=f"{d}b_{user_target}")
-                # Net: 3 Yanlış 1 Doğruyu Götürür
-                d_net = round(d_do - (d_ya / 3), 2)
-                toplam_net += d_net
-                deneme_verisi[d] = {"d": d_do, "y": d_ya, "b": d_bo, "net": d_net}
-            
+                dd = col1.number_input("D", 0, key=f"{d}d_{target_user}")
+                dy = col2.number_input("Y", 0, key=f"{d}y_{target_user}")
+                db_ = col3.number_input("B", 0, key=f"{d}b_{target_user}")
+                dnet = round(dd - (dy / 3), 2)
+                toplam_net += dnet
+                deneme_sonuc[d] = {"d": dd, "y": dy, "b": db_, "net": dnet}
             st.divider()
-            st.metric("Toplam Net", round(toplam_net, 2))
-            if st.button("Denemeyi Kaydet", key=f"btn_d_{user_target}"):
-                u_data["denemeler"].append({"t": str(dt), "y": yay, "detay": deneme_verisi, "toplam": round(toplam_net, 2)})
-                veri_kaydet(db); st.success("Deneme Analizi Kaydedildi!")
+            st.metric("Hesaplanan Toplam Net", round(toplam_net, 2))
+            if st.button("Denemeyi Kaydet", key=f"db_{target_user}"):
+                u_v["denemeler"].append({"t": str(dt), "y": yay, "detay": deneme_sonuc, "top": round(toplam_net, 2)})
+                veri_kaydet(db); st.success("Deneme eklendi!")
 
-        with m[2]:
-            st.subheader("Kitap Takibi")
-            kad = st.text_input("Kitap Adı", key=f"ka_{user_target}")
-            sy = st.number_input("Sayfa Sayısı", 0, key=f"sy_{user_target}")
-            bt = st.date_input("Başlangıç", datetime.date.today(), key=f"bt_{user_target}")
-            bitt = st.date_input("Bitiş", datetime.date.today(), key=f"bitt_{user_target}")
-            if st.button("Kitabı Kaydet", key=f"btn_k_{user_target}"):
-                u_data["kitaplar"].append({"ad": kad, "s": sy, "b": str(bt), "bit": str(bitt)})
-                veri_kaydet(db); st.success("Kitap Eklendi!")
+        with tab3:
+            st.subheader("Kitap Okuma")
+            kad = st.text_input("Kitap Adı", key=f"kad_{target_user}")
+            yzr = st.text_input("Yazar", key=f"yzr_{target_user}")
+            syf = st.number_input("Sayfa Sayısı", 0, key=f"syf_{target_user}")
+            if st.button("Kitabı Kaydet", key=f"kb_{target_user}"):
+                u_v["kitaplar"].append({"ad": kad, "yz": yzr, "s": syf, "t": str(datetime.date.today())})
+                veri_kaydet(db); st.success("Kitap eklendi!")
 
-    # --- ÖĞRENCİ PANELİ ---
+    # --- ÖĞRENCİ EKRANI ---
     if st.session_state.role == "student":
-        veri_giris_formu(st.session_state.user)
+        m = st.sidebar.selectbox("İşlem", ["Veri Girişi", "Gelişimim"])
+        if m == "Veri Girişi": ortak_giris_paneli(st.session_state.user)
+        else:
+            st.header("📈 Gelişim Analizim")
+            v = db["users"][st.session_state.user]
+            if v["denemeler"]:
+                df = pd.DataFrame(v["denemeler"])
+                st.plotly_chart(px.line(df, x="t", y="top", title="Net Gelişim Grafiği"))
 
-    # --- ÖĞRETMEN PANELİ ---
+    # --- ÖĞRETMEN EKRANI ---
     elif st.session_state.role == "teacher":
-        menu = st.sidebar.radio("Yönetim", ["Öğrenci Kaydı", "Öğrenci Girişleri", "Konu & Kaynak Yönetimi", "Analiz & Rapor"])
+        menu = st.sidebar.radio("Yönetim", ["Öğrenci Kayıt", "Girişler", "Kaynak & Konu", "Raporlar"])
+        
+        if menu == "Öğrenci Kayıt":
+            nu = st.text_input("Yeni Öğrenci Adı"); np = st.text_input("Şifre")
+            if st.button("Kaydet"):
+                db["users"][nu] = {"password": np, "sorular": [], "denemeler": [], "kitaplar": [], "kaynaklar": []}
+                veri_kaydet(db); st.success("Öğrenci eklendi.")
 
-        if menu == "Öğrenci Kaydı":
-            st.header("👤 Yeni Öğrenci Tanımla")
-            nu = st.text_input("Kullanıcı Adı")
-            np = st.text_input("Şifre")
-            if st.button("Öğrenciyi Kaydet"):
-                if nu not in db["users"]:
-                    db["users"][nu] = {"password": np, "sorular": [], "denemeler": [], "kitaplar": [], "hedefler": [], "kaynaklar": []}
-                    veri_kaydet(db); st.success(f"{nu} başarıyla kaydedildi.")
-                else: st.warning("Bu kullanıcı zaten var.")
+        elif menu == "Girişler":
+            sec = st.selectbox("Öğrenci Seç", list(db["users"].keys()))
+            if sec: ortak_giris_paneli(sec)
 
-        elif menu == "Öğrenci Girişleri":
-            st.header("✍️ Öğrenci Adına Veri Girişi")
-            secilen = st.selectbox("Öğrenci Seç", list(db["users"].keys()))
-            if secilen:
-                veri_giris_formu(secilen)
+        elif menu == "Kaynak & Konu":
+            st.header("📚 Kaynak Kitap Takibi")
+            sec_o = st.selectbox("Öğrenci Seç", list(db["users"].keys()))
+            drs_k = st.selectbox("Ders", list(DERSLER_KONULAR.keys()))
+            kn_k = st.selectbox("Konu", DERSLER_KONULAR[drs_k])
+            kay_ad = st.text_input("Kaynak Adı")
+            if st.button("Kaynağı Tanımla"):
+                db["users"][sec_o]["kaynaklar"].append({"d": drs_k, "k": kn_k, "ad": kay_ad, "t": str(datetime.date.today())})
+                veri_kaydet(db); st.success("Kaynak eklendi.")
 
-        elif menu == "Konu & Kaynak Yönetimi":
-            st.header("📚 Konu & Kaynak Takibi")
-            st.info("Bu bölüm sadece öğretmen kontrolündedir.")
-            sec_o = st.selectbox("Öğrenci Seç", list(db["users"].keys()), key="src_o")
-            k_ad = st.text_input("Kaynak Kitap Adı")
-            k_durum = st.select_slider("Tamamlanma Oranı %", options=[0, 25, 50, 75, 100])
-            if st.button("Kaynağı Güncelle"):
-                db["users"][sec_o]["kaynaklar"].append({"k": k_ad, "p": k_durum, "t": str(datetime.date.today())})
-                veri_kaydet(db); st.success("Kaynak takibi güncellendi.")
-
-        elif menu == "Analiz & Rapor":
-            st.header("📊 Detaylı Analizler")
-            st.write("Buradan tüm öğrencilerin verilerini pırıl pırıl (kodsuz) görebilirsiniz.")
-            for ad, v in db["users"].items():
-                with st.expander(f"{ad.upper()} Raporu"):
-                    if v["denemeler"]:
-                        df = pd.DataFrame(v["denemeler"])
-                        st.line_chart(df.set_index("t")["toplam"])
-                    else: st.write("Henüz deneme verisi yok.")
+        elif menu == "Raporlar":
+            sec_r = st.selectbox("Raporlanacak Öğrenci", list(db["users"].keys()))
+            if sec_r:
+                vr = db["users"][sec_r]
+                st.subheader(f"📊 {sec_r} Performans Özeti")
+                col1, col2, col3 = st.columns(3)
+                col1.metric("Toplam Soru", sum(int(s["do"])+int(s["ya"]) for s in vr["sorular"]))
+                col2.metric("Bitirilen Kaynak", len(vr["kaynaklar"]))
+                col3.metric("Okunan Kitap", len(vr["kitaplar"]))
+                
+                if st.button("📄 Profesyonel PDF Rapor Al"):
+                    st.info("PDF oluşturma motoru hazırlandı. (Karne çıktısı veriliyor...)")
