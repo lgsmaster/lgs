@@ -70,8 +70,9 @@ def veri_kaydet(data):
 if "db" not in st.session_state: st.session_state.db = veri_yukle()
 if "user" not in st.session_state: st.session_state.user = None
 
-# --- 5. PDF MOTORU (DÜZELTİLDİ) ---
+# --- 5. PDF MOTORU (DÜZELTİLDİ: TAM İSTEDİĞİN GİBİ) ---
 def tr_fix(text):
+    # Türkçe karakterleri PDF uyumlu hale getirir
     rep = {"ı":"i", "İ":"I", "ş":"s", "Ş":"S", "ğ":"g", "Ğ":"G", "ü":"u", "Ü":"U", "ö":"o", "Ö":"O", "ç":"c", "Ç":"C"}
     for old, new in rep.items(): text = text.replace(old, new)
     return text
@@ -80,16 +81,75 @@ def generate_pdf_report(user_name, user_data):
     pdf = FPDF()
     pdf.add_page()
     
-    # Mavi Başlık
-    pdf.set_fill_color(31, 119, 180)
-    pdf.set_text_color(255, 255, 255)
+    # 1. MAVİ BAŞLIK
+    pdf.set_fill_color(31, 119, 180) # Lacivert
+    pdf.set_text_color(255, 255, 255) # Beyaz Yazı
     pdf.set_font("Helvetica", 'B', 16)
-    pdf.cell(190, 15, tr_fix(f"LGS GELISIM RAPORU: {user_name.upper()}"), ln=True, align='C', fill=True)
+    pdf.cell(190, 15, tr_fix(f"LGS PERFORMANS KARNESI: {user_name.upper()}"), ln=True, align='C', fill=True)
     
-    pdf.set_text_color(0, 0, 0)
+    pdf.set_text_color(0, 0, 0) # Siyah yazıya dön
+    pdf.ln(5)
+
+    # 2. ÖZET BİLGİLER
+    pdf.set_font("Helvetica", 'B', 10)
+    top_soru = sum(int(s['do'])+int(s['ya'])+int(s['bo']) for s in user_data.get("sorular", []))
+    pdf.cell(190, 6, f"Toplam Cozulen Soru: {top_soru} | Girilen Deneme: {len(user_data.get('denemeler', []))}", ln=True)
+    pdf.ln(5)
+
+    # 3. DENEME ANALİZ TABLOSU
+    pdf.set_font("Helvetica", 'B', 12)
+    pdf.cell(190, 10, "DENEME SINAVLARI NET GELISIMI", ln=True)
+    
+    # Tablo Başlıkları
+    pdf.set_font("Helvetica", 'B', 9)
+    pdf.set_fill_color(230, 230, 230) # Gri arka plan
+    pdf.cell(35, 8, "Tarih", 1, 0, 'C', True)
+    pdf.cell(65, 8, "Yayin", 1, 0, 'C', True)
+    pdf.cell(45, 8, "Toplam Net", 1, 0, 'C', True)
+    pdf.cell(45, 8, "Degisim", 1, 1, 'C', True)
+    
+    # Tablo Verileri
+    pdf.set_font("Helvetica", '', 9)
+    prev = None
+    for d in sorted(user_data.get("denemeler", []), key=lambda x: x['t']):
+        degisim = round(d['top'] - prev, 2) if prev is not None else "-"
+        # Pozitif değişime + işareti
+        if isinstance(degisim, float) and degisim > 0: degisim = f"+{degisim}"
+        
+        pdf.cell(35, 7, d['t'], 1, 0, 'C')
+        pdf.cell(65, 7, tr_fix(d['y']), 1)
+        pdf.cell(45, 7, str(d['top']), 1, 0, 'C')
+        pdf.cell(45, 7, str(degisim), 1, 1, 'C')
+        prev = d['top']
+
     pdf.ln(10)
 
-    # 1. Kaynaklar
+    # 4. SORU ÇÖZÜM TABLOSU (DETAYLI)
+    pdf.set_font("Helvetica", 'B', 12)
+    pdf.cell(190, 10, "SON COZULEN SORULAR (DETAYLI DOKUM)", ln=True)
+    
+    # Başlıklar
+    pdf.set_font("Helvetica", 'B', 8)
+    # Sütun Genişlikleri: Tarih(25), Ders(30), Konu(60), D(12), Y(12), B(12), Top(39)
+    headers = [("Tarih",25), ("Ders",30), ("Konu",60), ("D",12), ("Y",12), ("B",12), ("Toplam",39)]
+    for h in headers:
+        pdf.cell(h[1], 8, h[0], 1, 0, 'C', True)
+    pdf.ln()
+    
+    # Veriler (Son 25 kayıt)
+    pdf.set_font("Helvetica", '', 7)
+    for s in user_data.get("sorular", [])[-25:]:
+        total = int(s['do']) + int(s['ya']) + int(s['bo'])
+        pdf.cell(25, 6, s['t'], 1)
+        pdf.cell(30, 6, tr_fix(s['d']), 1)
+        pdf.cell(60, 6, tr_fix(s['k'][:32]), 1) # Uzun konuları kes
+        pdf.cell(12, 6, str(s['do']), 1, 0, 'C')
+        pdf.cell(12, 6, str(s['ya']), 1, 0, 'C')
+        pdf.cell(12, 6, str(s['bo']), 1, 0, 'C')
+        pdf.cell(39, 6, str(total), 1, 1, 'C')
+
+    # 5. KAYNAKLAR
+    pdf.ln(10)
     pdf.set_font("Helvetica", 'B', 12)
     pdf.cell(190, 10, "ATANAN KAYNAKLAR", ln=True)
     pdf.set_font("Helvetica", '', 9)
@@ -97,36 +157,7 @@ def generate_pdf_report(user_name, user_data):
         for k in user_data["kaynaklar"]:
             pdf.cell(190, 7, tr_fix(f"- {k['d']} | {k['k']} | {k['ad']}"), ln=True)
     else:
-        pdf.cell(190, 7, "Henuz kaynak yok.", ln=True)
-    pdf.ln(5)
-    
-    # 2. Deneme Tablosu
-    pdf.set_font("Helvetica", 'B', 12)
-    pdf.cell(190, 10, "DENEME NET GELISIMI", ln=True)
-    pdf.set_font("Helvetica", 'B', 9)
-    pdf.set_fill_color(230, 230, 230)
-    pdf.cell(35, 8, "Tarih", 1, 0, 'C', True)
-    pdf.cell(65, 8, "Yayin", 1, 0, 'C', True)
-    pdf.cell(45, 8, "Toplam Net", 1, 0, 'C', True)
-    pdf.cell(45, 8, "Fark", 1, 1, 'C', True)
-    
-    pdf.set_font("Helvetica", '', 9)
-    prev = None
-    for d in sorted(user_data.get("denemeler", []), key=lambda x: x['t']):
-        degisim = round(d['top'] - prev, 2) if prev is not None else "-"
-        pdf.cell(35, 7, d['t'], 1, 0, 'C')
-        pdf.cell(65, 7, tr_fix(d['y']), 1)
-        pdf.cell(45, 7, str(d['top']), 1, 0, 'C')
-        pdf.cell(45, 7, str(degisim), 1, 1, 'C')
-        prev = d['top']
-
-    # 3. Kitaplar
-    pdf.ln(10)
-    pdf.set_font("Helvetica", 'B', 12)
-    pdf.cell(190, 10, "OKUNAN KITAPLAR", ln=True)
-    pdf.set_font("Helvetica", '', 9)
-    for b in user_data.get("kitaplar", []):
-        pdf.cell(190, 7, tr_fix(f"- {b['ad']} ({b.get('yz','-')}) | {b.get('s','0')} Sayfa"), ln=True)
+        pdf.cell(190, 7, "Kayitli kaynak bulunamadi.", ln=True)
 
     return bytes(pdf.output())
 
@@ -164,114 +195,4 @@ else:
             tar = c1.date_input("Tarih", datetime.date.today(), key=f"t_{uid}")
             dr = c2.selectbox("Ders", list(DERSLER_KONULAR.keys()), key=f"d_{uid}")
             # Key çakışmasını önlemek için 'soru_konu_'
-            ko = st.selectbox("Konu", DERSLER_KONULAR[dr], key=f"soru_konu_{uid}")
-            
-            x1, x2, x3 = st.columns(3)
-            do = x1.number_input("D",0,key=f"do_{uid}")
-            ya = x2.number_input("Y",0,key=f"ya_{uid}")
-            bo = x3.number_input("B",0,key=f"bo_{uid}")
-            if st.button("Soru Kaydet", key=f"btn_soru_{uid}"):
-                uv["sorular"].append({"t":str(tar),"d":dr,"k":ko,"do":do,"ya":ya,"bo":bo})
-                veri_kaydet(st.session_state.db)
-                st.success("Soru eklendi!")
-
-        # --- DENEME GİRİŞİ (LİSTE AÇIK + BOŞ KUTUSU) ---
-        with t2:
-            st.markdown("### 📊 Deneme Sınavı Girişi")
-            col_ust1, col_ust2 = st.columns(2)
-            yay = col_ust1.text_input("Yayın Adı", key=f"y_{uid}")
-            dt = col_ust2.date_input("Sınav Tarihi", datetime.date.today(), key=f"dt_{uid}")
-            
-            c_sol, c_sag = st.columns(2)
-            ders_listesi = list(DERSLER_KONULAR.keys())
-            
-            t_net = 0
-            d_detay = {}
-            
-            # Sol Sütun (İlk 3 Ders)
-            with c_sol:
-                for ds in ders_listesi[:3]:
-                    st.markdown(f"**{ds}**")
-                    k1, k2, k3 = st.columns(3)
-                    dd = k1.number_input("D", 0, key=f"{ds}d_{uid}")
-                    dy = k2.number_input("Y", 0, key=f"{ds}y_{uid}")
-                    db_ = k3.number_input("B", 0, key=f"{ds}b_{uid}")
-                    net = round(dd - (dy / 3), 2)
-                    t_net += net
-                    d_detay[ds] = {"d": dd, "y": dy, "b": db_, "net": net}
-                    st.caption(f"Net: {net}")
-                    st.divider()
-
-            # Sağ Sütun (Son 3 Ders)
-            with c_sag:
-                for ds in ders_listesi[3:]:
-                    st.markdown(f"**{ds}**")
-                    k1, k2, k3 = st.columns(3)
-                    dd = k1.number_input("D", 0, key=f"{ds}d_{uid}")
-                    dy = k2.number_input("Y", 0, key=f"{ds}y_{uid}")
-                    db_ = k3.number_input("B", 0, key=f"{ds}b_{uid}")
-                    net = round(dd - (dy / 3), 2)
-                    t_net += net
-                    d_detay[ds] = {"d": dd, "y": dy, "b": db_, "net": net}
-                    st.caption(f"Net: {net}")
-                    st.divider()
-
-            st.info(f"📌 Toplam Net: {round(t_net, 2)}")
-            if st.button("Deneme Sonucunu Kaydet", key=f"btn_deneme_{uid}"):
-                uv["denemeler"].append({"t": str(dt), "y": yay, "top": round(t_net, 2), "detay": d_detay})
-                veri_kaydet(st.session_state.db)
-                st.success("Deneme kaydedildi!")
-
-        # --- KİTAP GİRİŞİ (DÜZELTİLDİ: TÜM DETAYLAR) ---
-        with t3:
-            st.markdown("### 📚 Kitap Okuma Takibi")
-            # Key çakışmasını önlemek için 'b_' prefix
-            kad = st.text_input("Kitap Adı", key=f"b_ad_{uid}")
-            kyz = st.text_input("Yazar", key=f"b_yazar_{uid}")
-            ksy = st.number_input("Sayfa Sayısı", 0, key=f"b_sayfa_{uid}")
-            
-            c_b1, c_b2 = st.columns(2)
-            bt = c_b1.date_input("Başlama", key=f"b_basla_{uid}")
-            bit = c_b2.date_input("Bitiş", key=f"b_bitis_{uid}")
-            
-            if st.button("Kitap Ekle", key=f"btn_kitap_{uid}"):
-                uv["kitaplar"].append({"ad":kad, "yz":kyz, "s":ksy, "b":str(bt), "bit":str(bit)})
-                veri_kaydet(st.session_state.db)
-                st.success("Kitap eklendi!")
-
-    if st.session_state.role == "student":
-        st.header(f"Merhaba {st.session_state.user}")
-        m = st.radio("Menü", ["Veri Girişi", "Gelişim"], horizontal=True)
-        if m == "Veri Girişi": data_hub(st.session_state.user)
-        else:
-            uv = st.session_state.db["users"][st.session_state.user]
-            if uv.get("kaynaklar"): 
-                st.write("### 📚 Ödevlerim")
-                st.table(pd.DataFrame(uv["kaynaklar"]))
-            if uv.get("denemeler"):
-                df = pd.DataFrame(uv["denemeler"])
-                st.plotly_chart(px.line(df, x="t", y="top", markers=True))
-
-    elif st.session_state.role == "teacher":
-        st.header("Öğretmen Paneli")
-        m = st.sidebar.radio("İşlemler", ["Öğrenci Ekle", "Veri Girişi", "Kaynak Ata", "Raporlar"])
-        if m == "Öğrenci Ekle":
-            nu, np = st.text_input("Ad"), st.text_input("Şifre")
-            if st.button("Kaydet"):
-                st.session_state.db["users"][nu] = {"password":np, "sorular":[], "denemeler":[], "kitaplar":[], "kaynaklar":[]}
-                veri_kaydet(st.session_state.db); st.success("Tamam")
-        elif m == "Veri Girişi":
-            so = st.selectbox("Seç", list(st.session_state.db["users"].keys()))
-            if so: data_hub(so)
-        elif m == "Kaynak Ata":
-            so = st.selectbox("Öğrenci", list(st.session_state.db["users"].keys()))
-            sd = st.selectbox("Ders", list(DERSLER_KONULAR.keys()))
-            sk = st.selectbox("Konu", DERSLER_KONULAR[sd])
-            r = st.text_input("Kaynak")
-            if st.button("Ata"):
-                st.session_state.db["users"][so]["kaynaklar"].append({"d":sd, "k":sk, "ad":r})
-                veri_kaydet(st.session_state.db); st.success("Atandı")
-        elif m == "Raporlar":
-            sr = st.selectbox("Öğrenci", list(st.session_state.db["users"].keys()))
-            if sr:
-                st.download_button("PDF İndir", generate_pdf_report(sr, st.session_state.db["users"][sr]), f"{sr}.pdf")
+            ko =
