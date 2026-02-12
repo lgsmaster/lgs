@@ -84,7 +84,12 @@
                     }
                 }
             ],
-            "kitaplar": [],
+            "kitaplar": [
+                {
+                    "ad": "Mehmet",
+                    "t": "2026-02-12"
+                }
+            ],
             "kaynaklar": []
         }
     }
