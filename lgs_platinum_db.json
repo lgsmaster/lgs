@@ -28,7 +28,45 @@
                     "bo": 0
                 }
             ],
-            "denemeler": [],
+            "denemeler": [
+                {
+                    "t": "2026-02-12",
+                    "y": "Fenomen",
+                    "top": 120.0,
+                    "detay": {
+                        "Turkce": {
+                            "d": 20,
+                            "y": 0,
+                            "net": 20.0
+                        },
+                        "Matematik": {
+                            "d": 20,
+                            "y": 0,
+                            "net": 20.0
+                        },
+                        "Fen": {
+                            "d": 20,
+                            "y": 0,
+                            "net": 20.0
+                        },
+                        "Inkilap": {
+                            "d": 20,
+                            "y": 0,
+                            "net": 20.0
+                        },
+                        "Din": {
+                            "d": 20,
+                            "y": 0,
+                            "net": 20.0
+                        },
+                        "Ingilizce": {
+                            "d": 20,
+                            "y": 0,
+                            "net": 20.0
+                        }
+                    }
+                }
+            ],
             "kitaplar": [],
             "kaynaklar": []
         }
