@@ -70,7 +70,7 @@ if "db" not in st.session_state: st.session_state.db = veri_yukle()
 if "user" not in st.session_state: st.session_state.user = None
 if "role" not in st.session_state: st.session_state.role = None
 
-# --- 5. PDF MOTORU (DERS BAZLI NETLER EKLENDİ) ---
+# --- 5. PDF MOTORU ---
 def tr_fix(text):
     rep = {"ı":"i", "İ":"I", "ş":"s", "Ş":"S", "ğ":"g", "Ğ":"G", "ü":"u", "Ü":"U", "ö":"o", "Ö":"O", "ç":"c", "Ç":"C"}
     for old, new in rep.items(): text = text.replace(old, new)
@@ -92,53 +92,68 @@ def generate_pdf_report(user_name, user_data):
     # --- B. ÖZET ---
     pdf.set_font("Helvetica", 'B', 10)
     top_soru = sum(int(s.get('do',0))+int(s.get('ya',0))+int(s.get('bo',0)) for s in user_data.get("sorular", []))
-    pdf.cell(190, 6, f"Toplam Soru: {top_soru} | Deneme Sayisi: {len(user_data.get('denemeler', []))}", ln=True)
+    pdf.cell(190, 6, f"Toplam Soru: {top_soru} | Deneme Sayisi: {len(user_data.get('denemeler', []))} | Kitap: {len(user_data.get('kitaplar', []))}", ln=True)
     pdf.ln(5)
 
     # --- C. DENEME ANALİZİ (DERS BAZLI DETAYLI) ---
     pdf.set_font("Helvetica", 'B', 12)
     pdf.cell(190, 10, "DENEME SINAVLARI DETAYLI NET ANALIZI", ln=True)
     
-    # Tablo Başlıkları (Tr, Mat, Fen vb.)
     pdf.set_font("Helvetica", 'B', 8)
     pdf.set_fill_color(230, 230, 230)
     
-    # Sütun Genişlikleri: Tarih(20), Yayın(35), Dersler(16'şar), Top(19)
-    # Toplam genişlik sayfa içine sığmalı (190mm)
+    # Sütunlar
     headers = [("Tarih",20), ("Yayin",35), ("Tr",16), ("Mat",16), ("Fen",16), ("Ink",16), ("Din",16), ("Ing",16), ("Top",19)]
     
     for h in headers:
         pdf.cell(h[1], 8, h[0], 1, 0, 'C', True)
     pdf.ln()
     
-    # Veriler
     pdf.set_font("Helvetica", '', 8)
-    # Ders Anahtarları (Veritabanındaki isimleriyle)
     ders_keys = ["Turkce", "Matematik", "Fen", "Inkilap", "Din", "Ingilizce"]
     
     for d in sorted(user_data.get("denemeler", []), key=lambda x: x['t']):
         pdf.cell(20, 7, d['t'], 1)
-        pdf.cell(35, 7, tr_fix(d['y'][:18]), 1) # Yayını sığdırmak için kısalt
-        
-        # Her dersin netini yaz
+        pdf.cell(35, 7, tr_fix(d['y'][:18]), 1)
         detay = d.get('detay', {})
         for key in ders_keys:
-            if key in detay:
-                net_val = str(detay[key]['net'])
-            else:
-                net_val = "-"
+            net_val = str(detay[key]['net']) if key in detay else "-"
             pdf.cell(16, 7, net_val, 1, 0, 'C')
-            
-        # Toplam Net
         pdf.cell(19, 7, str(d['top']), 1, 1, 'C')
 
-    pdf.ln(10)
+    pdf.ln(5)
 
-    # --- D. SORU ÇÖZÜM TABLOSU ---
+    # --- D. KİTAP LİSTESİ (YENİ EKLENDİ) ---
+    pdf.set_font("Helvetica", 'B', 12)
+    pdf.cell(190, 10, "OKUMA GECMISI (KITAPLAR)", ln=True)
+    
+    pdf.set_font("Helvetica", 'B', 8)
+    pdf.set_fill_color(230, 230, 230)
+    # Başlıklar: Kitap, Yazar, Sayfa, Başlama, Bitiş
+    h_book = [("Kitap Adi",60), ("Yazar",40), ("Sayfa",20), ("Baslama",35), ("Bitis",35)]
+    for h in h_book:
+        pdf.cell(h[1], 8, h[0], 1, 0, 'C', True)
+    pdf.ln()
+    
+    pdf.set_font("Helvetica", '', 8)
+    if user_data.get("kitaplar"):
+        for b in user_data["kitaplar"]:
+            pdf.cell(60, 7, tr_fix(b['ad'][:30]), 1)
+            pdf.cell(40, 7, tr_fix(b['yz'][:20]), 1)
+            pdf.cell(20, 7, str(b['s']), 1, 0, 'C')
+            pdf.cell(35, 7, b['b'], 1, 0, 'C')
+            pdf.cell(35, 7, b['bit'], 1, 1, 'C')
+    else:
+        pdf.cell(190, 7, "Henuz kitap girisi yapilmadi.", 1, 1, 'C')
+
+    pdf.ln(5)
+
+    # --- E. SORU ÇÖZÜM TABLOSU ---
     pdf.set_font("Helvetica", 'B', 12)
     pdf.cell(190, 10, "SON COZULEN SORULAR", ln=True)
     
     pdf.set_font("Helvetica", 'B', 8)
+    pdf.set_fill_color(230, 230, 230)
     headers_soru = [("Tarih",25), ("Ders",30), ("Konu",60), ("D",12), ("Y",12), ("B",12), ("Top",39)]
     for h in headers_soru:
         pdf.cell(h[1], 8, h[0], 1, 0, 'C', True)
@@ -155,8 +170,8 @@ def generate_pdf_report(user_name, user_data):
         pdf.cell(12, 6, str(s['bo']), 1, 0, 'C')
         pdf.cell(39, 6, str(total), 1, 1, 'C')
 
-    # --- E. KAYNAKLAR ---
-    pdf.ln(10)
+    # --- F. KAYNAKLAR ---
+    pdf.ln(5)
     pdf.set_font("Helvetica", 'B', 12)
     pdf.cell(190, 10, "ATANAN KAYNAKLAR", ln=True)
     pdf.set_font("Helvetica", '', 9)
