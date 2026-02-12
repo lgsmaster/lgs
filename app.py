@@ -3,20 +3,11 @@ import pandas as pd
 import json
 import os
 import datetime
-import plotly.express as px
 from fpdf import FPDF
 from github import Github
 
-# --- 1. SAYFA AYARLARI (EN BAŞTA OLMALI) ---
+# --- 1. SAYFA AYARLARI (EN BAŞA YAZILMALI) ---
 st.set_page_config(page_title="LGS Master Pro", page_icon="🏆", layout="wide")
-
-# --- 2. OTURUM BAŞLATMA (HATA ÇÖZÜMÜ BURADA) ---
-if "user" not in st.session_state:
-    st.session_state.user = None
-if "role" not in st.session_state:
-    st.session_state.role = None
-if "db" not in st.session_state:
-    st.session_state.db = {}
 
 # --- AYARLAR ---
 DB_FILE = "lgs_database.json"
@@ -31,51 +22,64 @@ DERSLER_KONULAR = {
     "Ingilizce": ["Friendship", "Teen Life", "In The Kitchen", "On The Phone"]
 }
 
-# --- GITHUB YEDEKLEME FONKSİYONU ---
+# --- GITHUB YEDEKLEME ---
 def github_yedekle(data):
     try:
-        # Secrets ayarlarını kontrol et
         if "general" in st.secrets:
             token = st.secrets["general"]["GITHUB_TOKEN"]
             repo_name = st.secrets["general"]["REPO_NAME"]
-            
             g = Github(token)
             repo = g.get_repo(repo_name)
-            
-            # Dosya varsa güncelle, yoksa oluştur
             try:
                 contents = repo.get_contents(DB_FILE)
                 repo.update_file(contents.path, "Oto-Yedek", json.dumps(data, indent=4), contents.sha)
             except:
-                repo.create_file(DB_FILE, "İlk Kurulum", json.dumps(data, indent=4))
+                repo.create_file(DB_FILE, "Ilk Kurulum", json.dumps(data, indent=4))
             return True
-    except Exception as e:
-        # GitHub ayarı yoksa sessizce geç, yerel çalışmaya devam et
-        print(f"Yedekleme uyarısı: {e}")
+    except:
         return False
 
-# --- VERİ YÖNETİMİ ---
+# --- VERİ YÖNETİMİ (HATA DÜZELTİCİ) ---
 def veri_yukle():
+    defaults = {"users": {}, "admin_sifre": "admin123"}
+    
     if os.path.exists(DB_FILE):
-        with open(DB_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    return {"users": {}, "admin_sifre": "admin123"}
+        try:
+            with open(DB_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                
+            # KRİTİK DÜZELTME: Eğer dosyada 'admin_sifre' yoksa ekle
+            if "admin_sifre" not in data:
+                data["admin_sifre"] = "admin123"
+            if "users" not in data:
+                data["users"] = {}
+                
+            return data
+        except:
+            # Dosya bozuksa varsayılanı döndür
+            return defaults
+            
+    return defaults
 
 def veri_kaydet(data):
-    # 1. Yerel Kayıt (Hız için)
+    # Yerel Kayıt
     with open(DB_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
     st.session_state.db = data
     
-    # 2. Bulut Yedekleme (Güvenlik için)
+    # GitHub Kayıt
     if github_yedekle(data):
-        st.toast("☁️ Veriler GitHub'a yedeklendi!", icon="✅")
+        st.toast("☁️ Buluta Yedeklendi!", icon="✅")
     else:
-        st.toast("💾 Veriler yerel diske kaydedildi.", icon="ℹ️")
+        st.toast("💾 Yerel Kayıt Yapıldı", icon="ℹ️")
 
-# Uygulama açılışında veriyi yükle
-if not st.session_state.db:
+# --- OTURUM BAŞLATMA ---
+if "db" not in st.session_state:
     st.session_state.db = veri_yukle()
+if "user" not in st.session_state:
+    st.session_state.user = None
+if "role" not in st.session_state:
+    st.session_state.role = None
 
 # --- YARDIMCI FONKSİYONLAR ---
 def tr_fix(text):
@@ -89,16 +93,13 @@ def generate_pdf(user_name, user_data):
     pdf.set_font("Helvetica", 'B', 16)
     pdf.cell(190, 15, tr_fix(f"LGS RAPORU: {user_name.upper()}"), ln=True, align='C')
     
-    # Özet
     pdf.ln(5)
     pdf.set_font("Helvetica", 'B', 12)
-    pdf.cell(190, 10, "GENEL DURUM", ln=True)
-    pdf.set_font("Helvetica", '', 10)
-    top_soru = sum(int(s["do"])+int(s["ya"]) for s in user_data.get("sorular", []))
-    pdf.cell(190, 7, f"- Toplam Soru: {top_soru}", ln=True)
-    pdf.cell(190, 7, f"- Kaynak Sayisi: {len(user_data.get('kaynaklar', []))}", ln=True)
+    pdf.cell(190, 10, "ATANAN KAYNAKLAR", ln=True)
+    pdf.set_font("Helvetica", '', 9)
+    for k in user_data.get("kaynaklar", []):
+        pdf.cell(190, 7, tr_fix(f"- {k['d']} | {k['k']} | {k['ad']}"), ln=True)
     
-    # Deneme Analizi
     pdf.ln(5)
     pdf.set_font("Helvetica", 'B', 12)
     pdf.cell(190, 10, "DENEME ANALIZI", ln=True)
@@ -127,6 +128,7 @@ if st.session_state.user is None:
         if st.button("Admin Giriş"):
             if ap == st.session_state.db["admin_sifre"]:
                 st.session_state.user, st.session_state.role = "Admin", "teacher"; st.rerun()
+            else: st.error("Şifre Yanlış!")
 
 else:
     kalan = LGS_TARIHI - datetime.datetime.now()
@@ -181,7 +183,7 @@ else:
                 st.session_state.db["users"][nu] = {"password": np, "sorular": [], "denemeler": [], "kitaplar": [], "kaynaklar": []}
                 veri_kaydet(st.session_state.db); st.success("Eklendi")
         elif m == "Veri Girişi":
-            so = st.selectbox("Öğrenci", list(st.session_state.db["users"].keys()))
+            so = st.selectbox("Seç", list(st.session_state.db["users"].keys()))
             if so: forms(so)
         elif m == "Kaynak Ata":
             so = st.selectbox("Öğrenci", list(st.session_state.db["users"].keys()))
