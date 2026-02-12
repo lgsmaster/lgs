@@ -7,20 +7,20 @@ import plotly.express as px
 from fpdf import FPDF
 from github import Github
 
-# --- 1. SAYFA AYARLARI ---
+# --- 1. SAYFA VE SİSTEM AYARLARI ---
 st.set_page_config(page_title="LGS Master Pro", page_icon="🏆", layout="wide")
 
-# --- 2. AYARLAR ---
+# --- 2. SABİTLER ---
 DB_FILE = "lgs_platinum_db.json"
 LGS_TARIHI = datetime.datetime(2026, 6, 14, 9, 30)
 
 DERSLER_KONULAR = {
-    "Turkce": ["Paragraf", "Sozcukte Anlam", "Cumlede Anlam", "Fiilimsiler", "Cumlenin Ogeleri", "Yazim Kurallari"],
-    "Matematik": ["Carpanlar ve Katlar", "Uslu Ifadeler", "Karekoklu Ifadeler", "Veri Analizi", "Olasilik", "Cebirsel Ifadeler"],
-    "Fen": ["Mevsimler ve Iklim", "DNA ve Genetik Kod", "Basinc", "Madde ve Endustri"],
-    "Inkilap": ["Bir Kahraman Doguyor", "Milli Uyanis", "Ya Istiklal Ya Olum"],
-    "Din": ["Kader Inanci", "Zekat ve Sadaka", "Din ve Hayat"],
-    "Ingilizce": ["Friendship", "Teen Life", "In The Kitchen", "On The Phone"]
+    "Turkce": ["Paragraf", "Sozcukte Anlam", "Cumlede Anlam", "Fiilimsiler", "Cumlenin Ogeleri", "Yazim Kurallari", "Noktalama Isaretleri"],
+    "Matematik": ["Carpanlar ve Katlar", "Uslu Ifadeler", "Karekoklu Ifadeler", "Veri Analizi", "Olasilik", "Cebirsel Ifadeler", "Dogrusal Denklemler"],
+    "Fen": ["Mevsimler ve Iklim", "DNA ve Genetik Kod", "Basinc", "Madde ve Endustri", "Basit Makineler", "Enerji Donusumleri"],
+    "Inkilap": ["Bir Kahraman Doguyor", "Milli Uyanis", "Ya Istiklal Ya Olum", "Ataturkculuk ve Cagdaslasma"],
+    "Din": ["Kader Inanci", "Zekat ve Sadaka", "Din ve Hayat", "Hz. Muhammed'in Ornekligi"],
+    "Ingilizce": ["Friendship", "Teen Life", "In The Kitchen", "On The Phone", "The Internet"]
 }
 
 # --- 3. GITHUB OTOMATİK YEDEKLEME ---
@@ -29,11 +29,13 @@ def github_yedekle(data):
         if "general" in st.secrets:
             token = st.secrets["general"]["GITHUB_TOKEN"]
             repo_name = st.secrets["general"]["REPO_NAME"]
+            
             g = Github(token)
             repo = g.get_repo(repo_name)
+            
             try:
                 contents = repo.get_contents(DB_FILE)
-                repo.update_file(contents.path, "Oto-Yedek", json.dumps(data, indent=4), contents.sha)
+                repo.update_file(contents.path, "Oto-Yedek (Streamlit)", json.dumps(data, indent=4), contents.sha)
             except:
                 repo.create_file(DB_FILE, "İlk Kurulum", json.dumps(data, indent=4))
             return True
@@ -56,23 +58,20 @@ def veri_yukle():
     return {"users": {}, "admin_sifre": "admin123"}
 
 def veri_kaydet(data):
-    # Yerel Kayıt
     with open(DB_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
     st.session_state.db = data
-    
-    # Bulut Kayıt
     if github_yedekle(data):
-        st.toast("☁️ GitHub'a yedeklendi!", icon="✅")
+        st.toast("☁️ Veriler GitHub'a yedeklendi!", icon="✅")
     else:
-        st.toast("💾 Yerel kayıt yapıldı.", icon="ℹ️")
+        st.toast("💾 Yerel diske kaydedildi.", icon="ℹ️")
 
 if "db" not in st.session_state: st.session_state.db = veri_yukle()
 if "user" not in st.session_state: st.session_state.user = None
+if "role" not in st.session_state: st.session_state.role = None
 
-# --- 5. PDF MOTORU (DÜZELTİLDİ: TAM İSTEDİĞİN GİBİ) ---
+# --- 5. PDF MOTORU (DERS BAZLI NETLER EKLENDİ) ---
 def tr_fix(text):
-    # Türkçe karakterleri PDF uyumlu hale getirir
     rep = {"ı":"i", "İ":"I", "ş":"s", "Ş":"S", "ğ":"g", "Ğ":"G", "ü":"u", "Ü":"U", "ö":"o", "Ö":"O", "ç":"c", "Ç":"C"}
     for old, new in rep.items(): text = text.replace(old, new)
     return text
@@ -81,74 +80,82 @@ def generate_pdf_report(user_name, user_data):
     pdf = FPDF()
     pdf.add_page()
     
-    # 1. MAVİ BAŞLIK
-    pdf.set_fill_color(31, 119, 180) # Lacivert
-    pdf.set_text_color(255, 255, 255) # Beyaz Yazı
+    # --- A. MAVİ BAŞLIK ---
+    pdf.set_fill_color(31, 119, 180) 
+    pdf.set_text_color(255, 255, 255) 
     pdf.set_font("Helvetica", 'B', 16)
-    pdf.cell(190, 15, tr_fix(f"LGS PERFORMANS KARNESI: {user_name.upper()}"), ln=True, align='C', fill=True)
+    pdf.cell(190, 15, tr_fix(f"LGS GELISIM RAPORU: {user_name.upper()}"), ln=True, align='C', fill=True)
     
-    pdf.set_text_color(0, 0, 0) # Siyah yazıya dön
+    pdf.set_text_color(0, 0, 0) 
     pdf.ln(5)
 
-    # 2. ÖZET BİLGİLER
+    # --- B. ÖZET ---
     pdf.set_font("Helvetica", 'B', 10)
-    top_soru = sum(int(s['do'])+int(s['ya'])+int(s['bo']) for s in user_data.get("sorular", []))
-    pdf.cell(190, 6, f"Toplam Cozulen Soru: {top_soru} | Girilen Deneme: {len(user_data.get('denemeler', []))}", ln=True)
+    top_soru = sum(int(s.get('do',0))+int(s.get('ya',0))+int(s.get('bo',0)) for s in user_data.get("sorular", []))
+    pdf.cell(190, 6, f"Toplam Soru: {top_soru} | Deneme Sayisi: {len(user_data.get('denemeler', []))}", ln=True)
     pdf.ln(5)
 
-    # 3. DENEME ANALİZ TABLOSU
+    # --- C. DENEME ANALİZİ (DERS BAZLI DETAYLI) ---
     pdf.set_font("Helvetica", 'B', 12)
-    pdf.cell(190, 10, "DENEME SINAVLARI NET GELISIMI", ln=True)
+    pdf.cell(190, 10, "DENEME SINAVLARI DETAYLI NET ANALIZI", ln=True)
     
-    # Tablo Başlıkları
-    pdf.set_font("Helvetica", 'B', 9)
-    pdf.set_fill_color(230, 230, 230) # Gri arka plan
-    pdf.cell(35, 8, "Tarih", 1, 0, 'C', True)
-    pdf.cell(65, 8, "Yayin", 1, 0, 'C', True)
-    pdf.cell(45, 8, "Toplam Net", 1, 0, 'C', True)
-    pdf.cell(45, 8, "Degisim", 1, 1, 'C', True)
-    
-    # Tablo Verileri
-    pdf.set_font("Helvetica", '', 9)
-    prev = None
-    for d in sorted(user_data.get("denemeler", []), key=lambda x: x['t']):
-        degisim = round(d['top'] - prev, 2) if prev is not None else "-"
-        # Pozitif değişime + işareti
-        if isinstance(degisim, float) and degisim > 0: degisim = f"+{degisim}"
-        
-        pdf.cell(35, 7, d['t'], 1, 0, 'C')
-        pdf.cell(65, 7, tr_fix(d['y']), 1)
-        pdf.cell(45, 7, str(d['top']), 1, 0, 'C')
-        pdf.cell(45, 7, str(degisim), 1, 1, 'C')
-        prev = d['top']
-
-    pdf.ln(10)
-
-    # 4. SORU ÇÖZÜM TABLOSU (DETAYLI)
-    pdf.set_font("Helvetica", 'B', 12)
-    pdf.cell(190, 10, "SON COZULEN SORULAR (DETAYLI DOKUM)", ln=True)
-    
-    # Başlıklar
+    # Tablo Başlıkları (Tr, Mat, Fen vb.)
     pdf.set_font("Helvetica", 'B', 8)
-    # Sütun Genişlikleri: Tarih(25), Ders(30), Konu(60), D(12), Y(12), B(12), Top(39)
-    headers = [("Tarih",25), ("Ders",30), ("Konu",60), ("D",12), ("Y",12), ("B",12), ("Toplam",39)]
+    pdf.set_fill_color(230, 230, 230)
+    
+    # Sütun Genişlikleri: Tarih(20), Yayın(35), Dersler(16'şar), Top(19)
+    # Toplam genişlik sayfa içine sığmalı (190mm)
+    headers = [("Tarih",20), ("Yayin",35), ("Tr",16), ("Mat",16), ("Fen",16), ("Ink",16), ("Din",16), ("Ing",16), ("Top",19)]
+    
     for h in headers:
         pdf.cell(h[1], 8, h[0], 1, 0, 'C', True)
     pdf.ln()
     
-    # Veriler (Son 25 kayıt)
+    # Veriler
+    pdf.set_font("Helvetica", '', 8)
+    # Ders Anahtarları (Veritabanındaki isimleriyle)
+    ders_keys = ["Turkce", "Matematik", "Fen", "Inkilap", "Din", "Ingilizce"]
+    
+    for d in sorted(user_data.get("denemeler", []), key=lambda x: x['t']):
+        pdf.cell(20, 7, d['t'], 1)
+        pdf.cell(35, 7, tr_fix(d['y'][:18]), 1) # Yayını sığdırmak için kısalt
+        
+        # Her dersin netini yaz
+        detay = d.get('detay', {})
+        for key in ders_keys:
+            if key in detay:
+                net_val = str(detay[key]['net'])
+            else:
+                net_val = "-"
+            pdf.cell(16, 7, net_val, 1, 0, 'C')
+            
+        # Toplam Net
+        pdf.cell(19, 7, str(d['top']), 1, 1, 'C')
+
+    pdf.ln(10)
+
+    # --- D. SORU ÇÖZÜM TABLOSU ---
+    pdf.set_font("Helvetica", 'B', 12)
+    pdf.cell(190, 10, "SON COZULEN SORULAR", ln=True)
+    
+    pdf.set_font("Helvetica", 'B', 8)
+    headers_soru = [("Tarih",25), ("Ders",30), ("Konu",60), ("D",12), ("Y",12), ("B",12), ("Top",39)]
+    for h in headers_soru:
+        pdf.cell(h[1], 8, h[0], 1, 0, 'C', True)
+    pdf.ln()
+    
     pdf.set_font("Helvetica", '', 7)
-    for s in user_data.get("sorular", [])[-25:]:
-        total = int(s['do']) + int(s['ya']) + int(s['bo'])
+    for s in user_data.get("sorular", [])[-25:]: 
+        total = int(s.get('do',0)) + int(s.get('ya',0)) + int(s.get('bo',0))
         pdf.cell(25, 6, s['t'], 1)
         pdf.cell(30, 6, tr_fix(s['d']), 1)
-        pdf.cell(60, 6, tr_fix(s['k'][:32]), 1) # Uzun konuları kes
+        pdf.cell(60, 6, tr_fix(s['k'][:32]), 1)
         pdf.cell(12, 6, str(s['do']), 1, 0, 'C')
         pdf.cell(12, 6, str(s['ya']), 1, 0, 'C')
         pdf.cell(12, 6, str(s['bo']), 1, 0, 'C')
         pdf.cell(39, 6, str(total), 1, 1, 'C')
 
-    # 5. KAYNAKLAR
+    # --- E. KAYNAKLAR ---
     pdf.ln(10)
     pdf.set_font("Helvetica", 'B', 12)
     pdf.cell(190, 10, "ATANAN KAYNAKLAR", ln=True)
@@ -157,11 +164,11 @@ def generate_pdf_report(user_name, user_data):
         for k in user_data["kaynaklar"]:
             pdf.cell(190, 7, tr_fix(f"- {k['d']} | {k['k']} | {k['ad']}"), ln=True)
     else:
-        pdf.cell(190, 7, "Kayitli kaynak bulunamadi.", ln=True)
+        pdf.cell(190, 7, "Atanmis kaynak bulunamadi.", ln=True)
 
     return bytes(pdf.output())
 
-# --- 6. ARAYÜZ ---
+# --- 6. ARAYÜZ VE UYGULAMA ---
 if st.session_state.user is None:
     st.title("🛡️ LGS Master Pro")
     t1, t2 = st.tabs(["Öğrenci Girişi", "Öğretmen Girişi"])
@@ -189,24 +196,21 @@ else:
         uv = st.session_state.db["users"][uid]
         t1, t2, t3 = st.tabs(["📝 Soru", "📊 Deneme", "📚 Kitap"])
         
-        # --- SORU GİRİŞİ ---
         with t1:
             c1, c2 = st.columns(2)
             tar = c1.date_input("Tarih", datetime.date.today(), key=f"t_{uid}")
             dr = c2.selectbox("Ders", list(DERSLER_KONULAR.keys()), key=f"d_{uid}")
-            # Key çakışmasını önlemek için 'soru_konu_'
             ko = st.selectbox("Konu", DERSLER_KONULAR[dr], key=f"soru_konu_{uid}")
             
             x1, x2, x3 = st.columns(3)
-            do = x1.number_input("D",0,key=f"do_{uid}")
-            ya = x2.number_input("Y",0,key=f"ya_{uid}")
-            bo = x3.number_input("B",0,key=f"bo_{uid}")
+            do = x1.number_input("D", 0, key=f"do_{uid}")
+            ya = x2.number_input("Y", 0, key=f"ya_{uid}")
+            bo = x3.number_input("B", 0, key=f"bo_{uid}")
             if st.button("Soru Kaydet", key=f"btn_soru_{uid}"):
                 uv["sorular"].append({"t":str(tar),"d":dr,"k":ko,"do":do,"ya":ya,"bo":bo})
                 veri_kaydet(st.session_state.db)
-                st.success("Soru eklendi!")
+                st.success("Soru kaydedildi!")
 
-        # --- DENEME GİRİŞİ (LİSTE AÇIK + BOŞ KUTUSU) ---
         with t2:
             st.markdown("### 📊 Deneme Sınavı Girişi")
             col_ust1, col_ust2 = st.columns(2)
@@ -219,7 +223,6 @@ else:
             t_net = 0
             d_detay = {}
             
-            # Sol Sütun (İlk 3 Ders)
             with c_sol:
                 for ds in ders_listesi[:3]:
                     st.markdown(f"**{ds}**")
@@ -230,10 +233,8 @@ else:
                     net = round(dd - (dy / 3), 2)
                     t_net += net
                     d_detay[ds] = {"d": dd, "y": dy, "b": db_, "net": net}
-                    st.caption(f"Net: {net}")
                     st.divider()
 
-            # Sağ Sütun (Son 3 Ders)
             with c_sag:
                 for ds in ders_listesi[3:]:
                     st.markdown(f"**{ds}**")
@@ -244,19 +245,16 @@ else:
                     net = round(dd - (dy / 3), 2)
                     t_net += net
                     d_detay[ds] = {"d": dd, "y": dy, "b": db_, "net": net}
-                    st.caption(f"Net: {net}")
                     st.divider()
 
             st.info(f"📌 Toplam Net: {round(t_net, 2)}")
             if st.button("Deneme Sonucunu Kaydet", key=f"btn_deneme_{uid}"):
                 uv["denemeler"].append({"t": str(dt), "y": yay, "top": round(t_net, 2), "detay": d_detay})
                 veri_kaydet(st.session_state.db)
-                st.success("Deneme kaydedildi!")
+                st.success("Deneme eklendi!")
 
-        # --- KİTAP GİRİŞİ (DETAYLI) ---
         with t3:
-            st.markdown("### 📚 Kitap Okuma Takibi")
-            # Key çakışmasını önlemek için 'b_' prefix
+            st.markdown("### 📚 Kitap Okuma")
             kad = st.text_input("Kitap Adı", key=f"b_ad_{uid}")
             kyz = st.text_input("Yazar", key=f"b_yazar_{uid}")
             ksy = st.number_input("Sayfa Sayısı", 0, key=f"b_sayfa_{uid}")
@@ -268,41 +266,11 @@ else:
             if st.button("Kitap Ekle", key=f"btn_kitap_{uid}"):
                 uv["kitaplar"].append({"ad":kad, "yz":kyz, "s":ksy, "b":str(bt), "bit":str(bit)})
                 veri_kaydet(st.session_state.db)
-                st.success("Kitap eklendi!")
+                st.success("Kitap kaydedildi!")
 
     if st.session_state.role == "student":
         st.header(f"Merhaba {st.session_state.user}")
         m = st.radio("Menü", ["Veri Girişi", "Gelişim"], horizontal=True)
         if m == "Veri Girişi": data_hub(st.session_state.user)
         else:
-            uv = st.session_state.db["users"][st.session_state.user]
-            if uv.get("kaynaklar"): 
-                st.write("### 📚 Ödevlerim")
-                st.table(pd.DataFrame(uv["kaynaklar"]))
-            if uv.get("denemeler"):
-                df = pd.DataFrame(uv["denemeler"])
-                st.plotly_chart(px.line(df, x="t", y="top", markers=True))
-
-    elif st.session_state.role == "teacher":
-        st.header("Öğretmen Paneli")
-        m = st.sidebar.radio("İşlemler", ["Öğrenci Ekle", "Veri Girişi", "Kaynak Ata", "Raporlar"])
-        if m == "Öğrenci Ekle":
-            nu, np = st.text_input("Ad"), st.text_input("Şifre")
-            if st.button("Kaydet"):
-                st.session_state.db["users"][nu] = {"password":np, "sorular":[], "denemeler":[], "kitaplar":[], "kaynaklar":[]}
-                veri_kaydet(st.session_state.db); st.success("Tamam")
-        elif m == "Veri Girişi":
-            so = st.selectbox("Seç", list(st.session_state.db["users"].keys()))
-            if so: data_hub(so)
-        elif m == "Kaynak Ata":
-            so = st.selectbox("Öğrenci", list(st.session_state.db["users"].keys()))
-            sd = st.selectbox("Ders", list(DERSLER_KONULAR.keys()))
-            sk = st.selectbox("Konu", DERSLER_KONULAR[sd])
-            r = st.text_input("Kaynak")
-            if st.button("Ata"):
-                st.session_state.db["users"][so]["kaynaklar"].append({"d":sd, "k":sk, "ad":r})
-                veri_kaydet(st.session_state.db); st.success("Atandı")
-        elif m == "Raporlar":
-            sr = st.selectbox("Öğrenci", list(st.session_state.db["users"].keys()))
-            if sr:
-                st.download_button("📄 PDF Analiz İndir", generate_pdf_report(sr, st.session_state.db["users"][sr]), f"{sr}_Karne.pdf")
+            uv = st.session_state.db["users"][st.session_state
