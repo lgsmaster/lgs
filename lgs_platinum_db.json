@@ -125,7 +125,13 @@
                     "bit": "2026-02-12"
                 }
             ],
-            "kaynaklar": []
+            "kaynaklar": [
+                {
+                    "d": "Turkce",
+                    "k": "Paragraf",
+                    "ad": "Fenomen"
+                }
+            ]
         }
     },
     "admin_sifre": "admin123"
