@@ -5,10 +5,21 @@ import os
 import datetime
 import plotly.express as px
 from fpdf import FPDF
-from github import Github # GitHub kütüphanesi
+from github import Github
+
+# --- 1. SAYFA AYARLARI (EN BAŞTA OLMALI) ---
+st.set_page_config(page_title="LGS Master Pro", page_icon="🏆", layout="wide")
+
+# --- 2. OTURUM BAŞLATMA (HATA ÇÖZÜMÜ BURADA) ---
+if "user" not in st.session_state:
+    st.session_state.user = None
+if "role" not in st.session_state:
+    st.session_state.role = None
+if "db" not in st.session_state:
+    st.session_state.db = {}
 
 # --- AYARLAR ---
-DB_FILE = "lgs_database.json" # Bu dosya GitHub reponda yaratılmış olmalı
+DB_FILE = "lgs_database.json"
 LGS_TARIHI = datetime.datetime(2026, 6, 14, 9, 30)
 
 DERSLER_KONULAR = {
@@ -20,45 +31,50 @@ DERSLER_KONULAR = {
     "Ingilizce": ["Friendship", "Teen Life", "In The Kitchen", "On The Phone"]
 }
 
-# --- GITHUB OTOMATİK YEDEKLEME FONKSİYONU ---
+# --- GITHUB YEDEKLEME FONKSİYONU ---
 def github_yedekle(data):
     try:
-        # Streamlit Secrets'tan bilgileri al
-        token = st.secrets["general"]["GITHUB_TOKEN"]
-        repo_name = st.secrets["general"]["REPO_NAME"]
-        
-        g = Github(token)
-        repo = g.get_repo(repo_name)
-        
-        # Dosyayı bul ve güncelle
-        contents = repo.get_contents(DB_FILE)
-        repo.update_file(contents.path, "Otomatik Yedekleme (Streamlit)", json.dumps(data, indent=4), contents.sha)
-        return True
+        # Secrets ayarlarını kontrol et
+        if "general" in st.secrets:
+            token = st.secrets["general"]["GITHUB_TOKEN"]
+            repo_name = st.secrets["general"]["REPO_NAME"]
+            
+            g = Github(token)
+            repo = g.get_repo(repo_name)
+            
+            # Dosya varsa güncelle, yoksa oluştur
+            try:
+                contents = repo.get_contents(DB_FILE)
+                repo.update_file(contents.path, "Oto-Yedek", json.dumps(data, indent=4), contents.sha)
+            except:
+                repo.create_file(DB_FILE, "İlk Kurulum", json.dumps(data, indent=4))
+            return True
     except Exception as e:
-        st.error(f"GitHub Yedekleme Hatası: {e}")
+        # GitHub ayarı yoksa sessizce geç, yerel çalışmaya devam et
+        print(f"Yedekleme uyarısı: {e}")
         return False
 
 # --- VERİ YÖNETİMİ ---
 def veri_yukle():
-    # Önce yerel dosyaya bak, yoksa boş başlat
     if os.path.exists(DB_FILE):
         with open(DB_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
     return {"users": {}, "admin_sifre": "admin123"}
 
 def veri_kaydet(data):
-    # 1. Yerel (Hızlı) Kayıt
+    # 1. Yerel Kayıt (Hız için)
     with open(DB_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
     st.session_state.db = data
     
-    # 2. GitHub (Bulut) Kayıt
+    # 2. Bulut Yedekleme (Güvenlik için)
     if github_yedekle(data):
-        st.toast("✅ Veriler GitHub'a güvenle kaydedildi!", icon="☁️")
+        st.toast("☁️ Veriler GitHub'a yedeklendi!", icon="✅")
     else:
-        st.toast("⚠️ Sadece yerel kayıt yapıldı.", icon="hdd")
+        st.toast("💾 Veriler yerel diske kaydedildi.", icon="ℹ️")
 
-if "db" not in st.session_state:
+# Uygulama açılışında veriyi yükle
+if not st.session_state.db:
     st.session_state.db = veri_yukle()
 
 # --- YARDIMCI FONKSİYONLAR ---
@@ -72,14 +88,17 @@ def generate_pdf(user_name, user_data):
     pdf.add_page()
     pdf.set_font("Helvetica", 'B', 16)
     pdf.cell(190, 15, tr_fix(f"LGS RAPORU: {user_name.upper()}"), ln=True, align='C')
+    
+    # Özet
     pdf.ln(5)
-    
     pdf.set_font("Helvetica", 'B', 12)
-    pdf.cell(190, 10, "ATANAN KAYNAKLAR", ln=True)
-    pdf.set_font("Helvetica", '', 9)
-    for k in user_data.get("kaynaklar", []):
-        pdf.cell(190, 7, tr_fix(f"- {k['d']} | {k['k']} | {k['ad']}"), ln=True)
+    pdf.cell(190, 10, "GENEL DURUM", ln=True)
+    pdf.set_font("Helvetica", '', 10)
+    top_soru = sum(int(s["do"])+int(s["ya"]) for s in user_data.get("sorular", []))
+    pdf.cell(190, 7, f"- Toplam Soru: {top_soru}", ln=True)
+    pdf.cell(190, 7, f"- Kaynak Sayisi: {len(user_data.get('kaynaklar', []))}", ln=True)
     
+    # Deneme Analizi
     pdf.ln(5)
     pdf.set_font("Helvetica", 'B', 12)
     pdf.cell(190, 10, "DENEME ANALIZI", ln=True)
@@ -93,20 +112,18 @@ def generate_pdf(user_name, user_data):
     return bytes(pdf.output())
 
 # --- ARAYÜZ ---
-st.set_page_config(page_title="LGS Master Pro", page_icon="🏆", layout="wide")
-
 if st.session_state.user is None:
-    st.title("🛡️ LGS Master - Otomatik Bulut Yedekli")
+    st.title("🛡️ LGS Master Pro")
     t1, t2 = st.tabs(["Öğrenci", "Öğretmen"])
     with t1:
-        u = st.text_input("Kullanıcı Adı")
-        p = st.text_input("Şifre", type="password")
-        if st.button("Giriş"):
+        u = st.text_input("Kullanıcı Adı", key="ulog")
+        p = st.text_input("Şifre", type="password", key="plog")
+        if st.button("Giriş Yap"):
             if u in st.session_state.db["users"] and st.session_state.db["users"][u]["password"] == p:
                 st.session_state.user, st.session_state.role = u, "student"; st.rerun()
             else: st.error("Hatalı Giriş")
     with t2:
-        ap = st.text_input("Yönetici Şifre", type="password")
+        ap = st.text_input("Admin Şifre", type="password")
         if st.button("Admin Giriş"):
             if ap == st.session_state.db["admin_sifre"]:
                 st.session_state.user, st.session_state.role = "Admin", "teacher"; st.rerun()
@@ -121,37 +138,37 @@ else:
         t1, t2, t3 = st.tabs(["📝 Soru", "📊 Deneme", "📚 Kitap"])
         
         with t1:
-            col1, col2 = st.columns(2)
-            tar = col1.date_input("Tarih", datetime.date.today(), key=f"t_{uid}")
-            dr = col2.selectbox("Ders", list(DERSLER_KONULAR.keys()), key=f"d_{uid}")
+            c1, c2 = st.columns(2)
+            tar = c1.date_input("Tarih", datetime.date.today(), key=f"t_{uid}")
+            dr = c2.selectbox("Ders", list(DERSLER_KONULAR.keys()), key=f"d_{uid}")
             ko = st.selectbox("Konu", DERSLER_KONULAR[dr], key=f"k_{uid}")
-            c1,c2,c3 = st.columns(3)
-            do, ya, bo = c1.number_input("D",0,key=f"do_{uid}"), c2.number_input("Y",0,key=f"ya_{uid}"), c3.number_input("B",0,key=f"bo_{uid}")
+            x1,x2,x3 = st.columns(3)
+            do, ya, bo = x1.number_input("D",0,key=f"do_{uid}"), x2.number_input("Y",0,key=f"ya_{uid}"), x3.number_input("B",0,key=f"bo_{uid}")
             if st.button("Kaydet", key=f"s_{uid}"):
                 uv["sorular"].append({"t": str(tar), "d": dr, "k": ko, "do": do, "ya": ya, "bo": bo})
                 veri_kaydet(st.session_state.db)
 
         with t2:
             yay = st.text_input("Yayın", key=f"y_{uid}")
-            dt = st.date_input("Tarih", datetime.date.today(), key=f"dt_{uid}")
+            dt = st.date_input("Sınav Tarihi", datetime.date.today(), key=f"dt_{uid}")
             t_net = 0
-            den_detay = {}
+            d_detay = {}
             for ds in DERSLER_KONULAR.keys():
                 with st.expander(ds):
-                    x1, x2 = st.columns(2)
-                    d_d, d_y = x1.number_input("D",0,key=f"{ds}d_{uid}"), x2.number_input("Y",0,key=f"{ds}y_{uid}")
-                    n = round(d_d - (d_y * 0.33), 2)
+                    k1, k2 = st.columns(2)
+                    dd, dy = k1.number_input("D",0,key=f"{ds}d_{uid}"), k2.number_input("Y",0,key=f"{ds}y_{uid}")
+                    n = round(dd - (dy * 0.33), 2)
                     t_net += n
-                    den_detay[ds] = {"d":d_d, "y":d_y, "net":n}
+                    d_detay[ds] = {"d":dd, "y":dy, "net":n}
             st.metric("Toplam Net", round(t_net, 2))
             if st.button("Deneme Kaydet", key=f"db_{uid}"):
-                uv["denemeler"].append({"t": str(dt), "y": yay, "top": round(t_net, 2), "detay": den_detay})
+                uv["denemeler"].append({"t": str(dt), "y": yay, "top": round(t_net, 2), "detay": d_detay})
                 veri_kaydet(st.session_state.db)
 
         with t3:
-            ka = st.text_input("Kitap Adı", key=f"k_{uid}")
+            kad = st.text_input("Kitap", key=f"ka_{uid}")
             if st.button("Kitap Ekle", key=f"kb_{uid}"):
-                uv["kitaplar"].append({"ad": ka, "t": str(datetime.date.today())})
+                uv["kitaplar"].append({"ad": kad, "t": str(datetime.date.today())})
                 veri_kaydet(st.session_state.db)
 
     if st.session_state.role == "student":
@@ -164,7 +181,7 @@ else:
                 st.session_state.db["users"][nu] = {"password": np, "sorular": [], "denemeler": [], "kitaplar": [], "kaynaklar": []}
                 veri_kaydet(st.session_state.db); st.success("Eklendi")
         elif m == "Veri Girişi":
-            so = st.selectbox("Seç", list(st.session_state.db["users"].keys()))
+            so = st.selectbox("Öğrenci", list(st.session_state.db["users"].keys()))
             if so: forms(so)
         elif m == "Kaynak Ata":
             so = st.selectbox("Öğrenci", list(st.session_state.db["users"].keys()))
