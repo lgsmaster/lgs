@@ -67,7 +67,15 @@
                     }
                 }
             ],
-            "kitaplar": [],
+            "kitaplar": [
+                {
+                    "ad": "Mehmet",
+                    "yz": "mehmet",
+                    "s": 120,
+                    "b": "2026-02-01",
+                    "bit": "2026-02-12"
+                }
+            ],
             "kaynaklar": []
         }
     },
