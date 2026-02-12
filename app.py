@@ -88,6 +88,14 @@ def generate_pdf_report(user_name, user_data):
     
     pdf.set_text_color(0, 0, 0)
     pdf.ln(10)
+
+    # Kaynaklar
+    pdf.set_font("Helvetica", 'B', 12)
+    pdf.cell(190, 10, "ATANAN KAYNAKLAR", ln=True)
+    pdf.set_font("Helvetica", '', 9)
+    for k in user_data.get("kaynaklar", []):
+        pdf.cell(190, 7, tr_fix(f"- {k['d']} | {k['k']} | {k['ad']}"), ln=True)
+    pdf.ln(5)
     
     # Deneme Tablosu
     pdf.set_font("Helvetica", 'B', 12)
@@ -143,23 +151,24 @@ else:
             c1, c2 = st.columns(2)
             tar = c1.date_input("Tarih", datetime.date.today(), key=f"t_{uid}")
             dr = c2.selectbox("Ders", list(DERSLER_KONULAR.keys()), key=f"d_{uid}")
-            ko = st.selectbox("Konu", DERSLER_KONULAR[dr], key=f"k_{uid}")
+            # HATA BURADAYDI: Key 'k' yerine 'konu' yapıldı
+            ko = st.selectbox("Konu", DERSLER_KONULAR[dr], key=f"konu_{uid}")
+            
             x1, x2, x3 = st.columns(3)
             do = x1.number_input("D",0,key=f"do_{uid}")
             ya = x2.number_input("Y",0,key=f"ya_{uid}")
             bo = x3.number_input("B",0,key=f"bo_{uid}")
-            if st.button("Kaydet", key=f"s_{uid}"):
+            if st.button("Kaydet", key=f"btn_soru_{uid}"):
                 uv["sorular"].append({"t":str(tar),"d":dr,"k":ko,"do":do,"ya":ya,"bo":bo})
                 veri_kaydet(st.session_state.db)
 
-        # --- DÜZELTİLEN DENEME GİRİŞ ALANI ---
+        # --- DENEME GİRİŞ ALANI (AÇIK LİSTE & BOŞ KUTUSU) ---
         with t2:
             st.markdown("### 📊 Deneme Sınavı Girişi")
             col_ust1, col_ust2 = st.columns(2)
             yay = col_ust1.text_input("Yayın Adı", key=f"y_{uid}")
             dt = col_ust2.date_input("Sınav Tarihi", datetime.date.today(), key=f"dt_{uid}")
             
-            # Ekranı ikiye bölerek dersleri listele (Açılır pencere yok!)
             c_sol, c_sag = st.columns(2)
             ders_listesi = list(DERSLER_KONULAR.keys())
             
@@ -177,7 +186,6 @@ else:
                     net = round(dd - (dy / 3), 2)
                     t_net += net
                     d_detay[ds] = {"d": dd, "y": dy, "b": db_, "net": net}
-                    st.caption(f"Net: {net}")
                     st.divider()
 
             # Sağ Sütun (Son 3 Ders)
@@ -191,18 +199,18 @@ else:
                     net = round(dd - (dy / 3), 2)
                     t_net += net
                     d_detay[ds] = {"d": dd, "y": dy, "b": db_, "net": net}
-                    st.caption(f"Net: {net}")
                     st.divider()
 
             st.success(f"📌 Toplam Net: {round(t_net, 2)}")
-            if st.button("Deneme Sonucunu Kaydet", key=f"db_{uid}"):
+            if st.button("Deneme Sonucunu Kaydet", key=f"btn_deneme_{uid}"):
                 uv["denemeler"].append({"t": str(dt), "y": yay, "top": round(t_net, 2), "detay": d_detay})
                 veri_kaydet(st.session_state.db)
 
         with t3:
-            k = st.text_input("Kitap Adı", key=f"k_{uid}")
-            if st.button("Ekle", key=f"kb_{uid}"):
-                uv["kitaplar"].append({"ad":k, "t":str(datetime.date.today())})
+            # HATA BURADAYDI: Key 'k' yerine 'kitap_adi' yapıldı
+            kitap_adi = st.text_input("Kitap Adı", key=f"kitap_adi_{uid}")
+            if st.button("Ekle", key=f"btn_kitap_{uid}"):
+                uv["kitaplar"].append({"ad":kitap_adi, "t":str(datetime.date.today())})
                 veri_kaydet(st.session_state.db)
 
     if st.session_state.role == "student":
@@ -211,7 +219,9 @@ else:
         if m == "Veri Girişi": data_hub(st.session_state.user)
         else:
             uv = st.session_state.db["users"][st.session_state.user]
-            if uv.get("kaynaklar"): st.table(pd.DataFrame(uv["kaynaklar"]))
+            if uv.get("kaynaklar"): 
+                st.write("### 📚 Ödevlerim")
+                st.table(pd.DataFrame(uv["kaynaklar"]))
             if uv.get("denemeler"):
                 df = pd.DataFrame(uv["denemeler"])
                 st.plotly_chart(px.line(df, x="t", y="top", markers=True))
