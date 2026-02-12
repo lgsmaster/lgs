@@ -273,4 +273,34 @@ else:
         m = st.radio("Menü", ["Veri Girişi", "Gelişim"], horizontal=True)
         if m == "Veri Girişi": data_hub(st.session_state.user)
         else:
-            uv = st.session_state.db["users"][st.session_state
+            uv = st.session_state.db["users"][st.session_state.user]
+            if uv.get("kaynaklar"): 
+                st.write("### 📚 Ödevlerim")
+                st.table(pd.DataFrame(uv["kaynaklar"]))
+            if uv.get("denemeler"):
+                df = pd.DataFrame(uv["denemeler"])
+                st.plotly_chart(px.line(df, x="t", y="top", markers=True))
+
+    elif st.session_state.role == "teacher":
+        st.header("Öğretmen Paneli")
+        m = st.sidebar.radio("İşlemler", ["Öğrenci Ekle", "Veri Girişi", "Kaynak Ata", "Raporlar"])
+        if m == "Öğrenci Ekle":
+            nu, np = st.text_input("Ad"), st.text_input("Şifre")
+            if st.button("Kaydet"):
+                st.session_state.db["users"][nu] = {"password":np, "sorular":[], "denemeler":[], "kitaplar":[], "kaynaklar":[]}
+                veri_kaydet(st.session_state.db); st.success("Tamam")
+        elif m == "Veri Girişi":
+            so = st.selectbox("Seç", list(st.session_state.db["users"].keys()))
+            if so: data_hub(so)
+        elif m == "Kaynak Ata":
+            so = st.selectbox("Öğrenci", list(st.session_state.db["users"].keys()))
+            sd = st.selectbox("Ders", list(DERSLER_KONULAR.keys()))
+            sk = st.selectbox("Konu", DERSLER_KONULAR[sd])
+            r = st.text_input("Kaynak")
+            if st.button("Ata"):
+                st.session_state.db["users"][so]["kaynaklar"].append({"d":sd, "k":sk, "ad":r})
+                veri_kaydet(st.session_state.db); st.success("Atandı")
+        elif m == "Raporlar":
+            sr = st.selectbox("Öğrenci", list(st.session_state.db["users"].keys()))
+            if sr:
+                st.download_button("📄 PDF Analiz İndir", generate_pdf_report(sr, st.session_state.db["users"][sr]), f"{sr}_Karne.pdf")
