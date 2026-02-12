@@ -12,7 +12,9 @@ st.set_page_config(page_title="LGS Master Pro", page_icon="🏆", layout="wide")
 
 # --- 2. SABİTLER ---
 DB_FILE = "lgs_platinum_db.json"
-LGS_TARIHI = datetime.datetime(2026, 6, 14, 9, 30)
+
+# Not: Varsayılan tarih. Öğretmen değiştirdiğinde veritabanındaki geçerli olur.
+VARSAYILAN_TARIH = "2026-06-14"
 
 DERSLER_KONULAR = {
     "Turkce": ["Paragraf", "Sozcukte Anlam", "Cumlede Anlam", "Fiilimsiler", "Cumlenin Ogeleri", "Yazim Kurallari", "Noktalama Isaretleri"],
@@ -50,12 +52,15 @@ def veri_yukle():
         try:
             with open(DB_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
+            # Eksik alan kontrolü
             if "users" not in data: data["users"] = {}
             if "admin_sifre" not in data: data["admin_sifre"] = "admin123"
+            # Tarih kontrolü (Yoksa varsayılanı ekle)
+            if "lgs_tarih" not in data: data["lgs_tarih"] = VARSAYILAN_TARIH
             return data
         except:
             pass
-    return {"users": {}, "admin_sifre": "admin123"}
+    return {"users": {}, "admin_sifre": "admin123", "lgs_tarih": VARSAYILAN_TARIH}
 
 def veri_kaydet(data):
     with open(DB_FILE, "w", encoding="utf-8") as f:
@@ -95,16 +100,13 @@ def generate_pdf_report(user_name, user_data):
     pdf.cell(190, 6, f"Toplam Soru: {top_soru} | Deneme Sayisi: {len(user_data.get('denemeler', []))} | Kitap: {len(user_data.get('kitaplar', []))}", ln=True)
     pdf.ln(5)
 
-    # --- C. DENEME ANALİZİ (DERS BAZLI DETAYLI) ---
+    # --- C. DENEME ANALİZİ ---
     pdf.set_font("Helvetica", 'B', 12)
     pdf.cell(190, 10, "DENEME SINAVLARI DETAYLI NET ANALIZI", ln=True)
     
     pdf.set_font("Helvetica", 'B', 8)
     pdf.set_fill_color(230, 230, 230)
-    
-    # Sütunlar
     headers = [("Tarih",20), ("Yayin",35), ("Tr",16), ("Mat",16), ("Fen",16), ("Ink",16), ("Din",16), ("Ing",16), ("Top",19)]
-    
     for h in headers:
         pdf.cell(h[1], 8, h[0], 1, 0, 'C', True)
     pdf.ln()
@@ -123,18 +125,15 @@ def generate_pdf_report(user_name, user_data):
 
     pdf.ln(5)
 
-    # --- D. KİTAP LİSTESİ (YENİ EKLENDİ) ---
+    # --- D. KİTAP LİSTESİ ---
     pdf.set_font("Helvetica", 'B', 12)
     pdf.cell(190, 10, "OKUMA GECMISI (KITAPLAR)", ln=True)
-    
     pdf.set_font("Helvetica", 'B', 8)
     pdf.set_fill_color(230, 230, 230)
-    # Başlıklar: Kitap, Yazar, Sayfa, Başlama, Bitiş
     h_book = [("Kitap Adi",60), ("Yazar",40), ("Sayfa",20), ("Baslama",35), ("Bitis",35)]
     for h in h_book:
         pdf.cell(h[1], 8, h[0], 1, 0, 'C', True)
     pdf.ln()
-    
     pdf.set_font("Helvetica", '', 8)
     if user_data.get("kitaplar"):
         for b in user_data["kitaplar"]:
@@ -151,14 +150,12 @@ def generate_pdf_report(user_name, user_data):
     # --- E. SORU ÇÖZÜM TABLOSU ---
     pdf.set_font("Helvetica", 'B', 12)
     pdf.cell(190, 10, "SON COZULEN SORULAR", ln=True)
-    
     pdf.set_font("Helvetica", 'B', 8)
     pdf.set_fill_color(230, 230, 230)
     headers_soru = [("Tarih",25), ("Ders",30), ("Konu",60), ("D",12), ("Y",12), ("B",12), ("Top",39)]
     for h in headers_soru:
         pdf.cell(h[1], 8, h[0], 1, 0, 'C', True)
     pdf.ln()
-    
     pdf.set_font("Helvetica", '', 7)
     for s in user_data.get("sorular", [])[-25:]: 
         total = int(s.get('do',0)) + int(s.get('ya',0)) + int(s.get('bo',0))
@@ -202,8 +199,15 @@ if st.session_state.user is None:
             else: st.error("Hatalı Şifre")
 
 else:
-    kalan = LGS_TARIHI - datetime.datetime.now()
-    st.sidebar.markdown(f"<div style='background:#d32f2f;color:white;padding:10px;border-radius:5px;text-align:center;'><b>⏳ LGS'YE {kalan.days} GÜN</b></div>", unsafe_allow_html=True)
+    # --- GERİ SAYIM (DİNAMİK) ---
+    # Tarihi veritabanından çek, string'den datetime'a çevir
+    hedef_str = st.session_state.db.get("lgs_tarih", VARSAYILAN_TARIH)
+    hedef_tarih = datetime.datetime.strptime(hedef_str, "%Y-%m-%d")
+    simdi = datetime.datetime.now()
+    kalan = hedef_tarih - simdi
+
+    # Sidebar
+    st.sidebar.markdown(f"<div style='background:#d32f2f;color:white;padding:10px;border-radius:5px;text-align:center;'><b>⏳ LGS'YE {kalan.days} GÜN</b><br><small>{hedef_str}</small></div>", unsafe_allow_html=True)
     st.sidebar.write(f"👤 {st.session_state.user}")
     if st.sidebar.button("Çıkış"): st.session_state.user = None; st.rerun()
 
@@ -216,7 +220,6 @@ else:
             tar = c1.date_input("Tarih", datetime.date.today(), key=f"t_{uid}")
             dr = c2.selectbox("Ders", list(DERSLER_KONULAR.keys()), key=f"d_{uid}")
             ko = st.selectbox("Konu", DERSLER_KONULAR[dr], key=f"soru_konu_{uid}")
-            
             x1, x2, x3 = st.columns(3)
             do = x1.number_input("D", 0, key=f"do_{uid}")
             ya = x2.number_input("Y", 0, key=f"ya_{uid}")
@@ -231,13 +234,10 @@ else:
             col_ust1, col_ust2 = st.columns(2)
             yay = col_ust1.text_input("Yayın Adı", key=f"y_{uid}")
             dt = col_ust2.date_input("Sınav Tarihi", datetime.date.today(), key=f"dt_{uid}")
-            
             c_sol, c_sag = st.columns(2)
             ders_listesi = list(DERSLER_KONULAR.keys())
-            
             t_net = 0
             d_detay = {}
-            
             with c_sol:
                 for ds in ders_listesi[:3]:
                     st.markdown(f"**{ds}**")
@@ -249,7 +249,6 @@ else:
                     t_net += net
                     d_detay[ds] = {"d": dd, "y": dy, "b": db_, "net": net}
                     st.divider()
-
             with c_sag:
                 for ds in ders_listesi[3:]:
                     st.markdown(f"**{ds}**")
@@ -261,7 +260,6 @@ else:
                     t_net += net
                     d_detay[ds] = {"d": dd, "y": dy, "b": db_, "net": net}
                     st.divider()
-
             st.info(f"📌 Toplam Net: {round(t_net, 2)}")
             if st.button("Deneme Sonucunu Kaydet", key=f"btn_deneme_{uid}"):
                 uv["denemeler"].append({"t": str(dt), "y": yay, "top": round(t_net, 2), "detay": d_detay})
@@ -273,11 +271,9 @@ else:
             kad = st.text_input("Kitap Adı", key=f"b_ad_{uid}")
             kyz = st.text_input("Yazar", key=f"b_yazar_{uid}")
             ksy = st.number_input("Sayfa Sayısı", 0, key=f"b_sayfa_{uid}")
-            
             c_b1, c_b2 = st.columns(2)
             bt = c_b1.date_input("Başlama", key=f"b_basla_{uid}")
             bit = c_b2.date_input("Bitiş", key=f"b_bitis_{uid}")
-            
             if st.button("Kitap Ekle", key=f"btn_kitap_{uid}"):
                 uv["kitaplar"].append({"ad":kad, "yz":kyz, "s":ksy, "b":str(bt), "bit":str(bit)})
                 veri_kaydet(st.session_state.db)
@@ -298,15 +294,18 @@ else:
 
     elif st.session_state.role == "teacher":
         st.header("Öğretmen Paneli")
-        m = st.sidebar.radio("İşlemler", ["Öğrenci Ekle", "Veri Girişi", "Kaynak Ata", "Raporlar"])
+        m = st.sidebar.radio("İşlemler", ["Öğrenci Ekle", "Veri Girişi", "Kaynak Ata", "Raporlar", "Sınav Tarihi Ayarla"])
+        
         if m == "Öğrenci Ekle":
             nu, np = st.text_input("Ad"), st.text_input("Şifre")
             if st.button("Kaydet"):
                 st.session_state.db["users"][nu] = {"password":np, "sorular":[], "denemeler":[], "kitaplar":[], "kaynaklar":[]}
                 veri_kaydet(st.session_state.db); st.success("Tamam")
+        
         elif m == "Veri Girişi":
             so = st.selectbox("Seç", list(st.session_state.db["users"].keys()))
             if so: data_hub(so)
+        
         elif m == "Kaynak Ata":
             so = st.selectbox("Öğrenci", list(st.session_state.db["users"].keys()))
             sd = st.selectbox("Ders", list(DERSLER_KONULAR.keys()))
@@ -315,7 +314,20 @@ else:
             if st.button("Ata"):
                 st.session_state.db["users"][so]["kaynaklar"].append({"d":sd, "k":sk, "ad":r})
                 veri_kaydet(st.session_state.db); st.success("Atandı")
+        
         elif m == "Raporlar":
             sr = st.selectbox("Öğrenci", list(st.session_state.db["users"].keys()))
             if sr:
                 st.download_button("📄 PDF Analiz İndir", generate_pdf_report(sr, st.session_state.db["users"][sr]), f"{sr}_Karne.pdf")
+        
+        # --- YENİ EKLENEN SINAV TARİHİ AYARLAMA ---
+        elif m == "Sınav Tarihi Ayarla":
+            st.subheader("📅 LGS Tarihini Değiştir")
+            current_date = datetime.datetime.strptime(st.session_state.db.get("lgs_tarih", VARSAYILAN_TARIH), "%Y-%m-%d").date()
+            new_date = st.date_input("Yeni Sınav Tarihi", current_date)
+            
+            if st.button("Tarihi Güncelle"):
+                st.session_state.db["lgs_tarih"] = str(new_date)
+                veri_kaydet(st.session_state.db)
+                st.success(f"Tarih güncellendi: {new_date}. Sol menüdeki sayaç yenilenecek.")
+                st.rerun()
