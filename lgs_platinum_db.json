@@ -1,0 +1,12 @@
+{
+    "users": {
+        "m": {
+            "password": "1",
+            "sorular": [],
+            "denemeler": [],
+            "kitaplar": [],
+            "kaynaklar": []
+        }
+    },
+    "admin_sifre": "admin123"
+}
