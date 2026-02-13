@@ -10,12 +10,11 @@ from github import Github
 # --- 1. SAYFA VE SİSTEM AYARLARI ---
 st.set_page_config(page_title="LGS Master Pro", page_icon="🏆", layout="wide")
 
-# --- GİZLİLİK VE GÜVENLİK (CSS) ---
-# Bu kısım üstteki menüyü, GitHub simgesini ve footer'ı gizler
+# --- GİZLİLİK VE GÜVENLİK (DÜZELTİLDİ) ---
+# Header satırını sildik, artık menü açma butonu kaybolmayacak.
 hide_streamlit_style = """
             <style>
             #MainMenu {visibility: hidden;}
-            header {visibility: hidden;}
             footer {visibility: hidden;}
             </style>
             """
@@ -26,7 +25,6 @@ DB_FILE = "lgs_platinum_db.json"
 VARSAYILAN_TARIH = "2026-06-14"
 
 # ŞİFREYİ GÜVENLİ YERDEN ÇEK (SECRETS)
-# Eğer Secrets ayarlanmamışsa geçici olarak 'admin123' kullanır (Güvenlik ağı)
 try:
     ADMIN_SIFRESI = st.secrets["general"]["ADMIN_SIFRE"]
 except:
@@ -59,7 +57,6 @@ def github_yedekle(data):
             return True
         return False
     except Exception as e:
-        # Hata olsa bile kullanıcıya gösterme (Güvenlik için)
         return False
 
 # --- 4. VERİ YÖNETİMİ ---
@@ -195,8 +192,6 @@ def generate_pdf_report(user_name, user_data):
 
 # --- 6. ARAYÜZ VE UYGULAMA ---
 if st.session_state.user is None:
-    # Başlıkları CSS ile biraz daha aşağı itmek gerekebilir header gizlendiği için
-    st.markdown("<br>", unsafe_allow_html=True)
     st.title("🛡️ LGS Master Pro")
     t1, t2 = st.tabs(["Öğrenci Girişi", "Öğretmen Girişi"])
     with t1:
@@ -209,13 +204,12 @@ if st.session_state.user is None:
     with t2:
         ap = st.text_input("Yönetici Şifresi", type="password")
         if st.button("Yönetici Giriş"):
-            # Şifreyi SECRETS değişkeninden kontrol et
             if ap == ADMIN_SIFRESI:
                 st.session_state.user, st.session_state.role = "Admin", "teacher"; st.rerun()
             else: st.error("Hatalı Şifre")
 
 else:
-    # --- GERİ SAYIM (DİNAMİK) ---
+    # --- GERİ SAYIM ---
     hedef_str = st.session_state.db.get("lgs_tarih", VARSAYILAN_TARIH)
     try:
         hedef_tarih = datetime.datetime.strptime(hedef_str, "%Y-%m-%d")
@@ -225,9 +219,10 @@ else:
     except:
         days_left = 0
 
-    # Sidebar
     st.sidebar.markdown(f"<div style='background:#d32f2f;color:white;padding:10px;border-radius:5px;text-align:center;'><b>⏳ LGS'YE {days_left} GÜN</b><br><small>{hedef_str}</small></div>", unsafe_allow_html=True)
     st.sidebar.write(f"👤 {st.session_state.user}")
+    
+    # MENÜ ÇIKIŞ BUTONU
     if st.sidebar.button("Çıkış"): st.session_state.user = None; st.rerun()
 
     def data_hub(uid):
