@@ -142,7 +142,15 @@
                     "ad": "Fenomen"
                 }
             ]
+        },
+        "ahmet123": {
+            "password": "Siyah.44",
+            "sorular": [],
+            "denemeler": [],
+            "kitaplar": [],
+            "kaynaklar": []
         }
     },
-    "admin_sifre": "admin123"
+    "admin_sifre": "admin123",
+    "lgs_tarih": "2026-06-14"
 }
