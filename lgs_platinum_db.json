@@ -209,7 +209,13 @@
                 }
             ],
             "kitaplar": [],
-            "kaynaklar": []
+            "kaynaklar": [
+                {
+                    "d": "Matematik",
+                    "k": "Carpanlar ve Katlar",
+                    "ad": "karek\u00f6k yay\u0131nlar\u0131"
+                }
+            ]
         }
     },
     "admin_sifre": "admin123",
