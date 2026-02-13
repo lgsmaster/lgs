@@ -10,18 +10,17 @@ from github import Github
 # --- 1. SAYFA VE SİSTEM AYARLARI ---
 st.set_page_config(page_title="LGS Master Pro", page_icon="🏆", layout="wide")
 
-# --- GİZLİLİK VE GÜVENLİK (DÜZELTİLDİ: CSS İLE ÖZEL AYAR) ---
-# Bu kod üst şeridi gizler ama 'collapsedControl' (Menü Butonu)nu görünür bırakır.
+# --- GİZLİLİK VE GÜVENLİK (CSS - DÜZELTİLMİŞ) ---
+# Header'ı komple silmiyoruz, sadece içindeki toolbar'ı (sağ üst butonları) siliyoruz.
+# Böylece sol üstteki menü açma butonu (ok işareti) zarar görmüyor.
 hide_streamlit_style = """
             <style>
             #MainMenu {visibility: hidden;}
             footer {visibility: hidden;}
-            header {visibility: hidden;}
-            [data-testid="collapsedControl"] {
-                visibility: visible;
-                color: black;
-                left: 1rem;
-                top: 1rem;
+            [data-testid="stToolbar"] {visibility: hidden !important;}
+            [data-testid="stDecoration"] {visibility: hidden !important;}
+            [data-testid="stHeader"] {
+                background-color: rgba(0,0,0,0);
             }
             </style>
             """
@@ -199,8 +198,6 @@ def generate_pdf_report(user_name, user_data):
 
 # --- 6. ARAYÜZ VE UYGULAMA ---
 if st.session_state.user is None:
-    # Başlıkları CSS gizlediği için biraz boşluk bırakalım
-    st.markdown("<br>", unsafe_allow_html=True)
     st.title("🛡️ LGS Master Pro")
     t1, t2 = st.tabs(["Öğrenci Girişi", "Öğretmen Girişi"])
     with t1:
@@ -278,82 +275,4 @@ else:
                     dd = k1.number_input("D", 0, key=f"{ds}d_{uid}")
                     dy = k2.number_input("Y", 0, key=f"{ds}y_{uid}")
                     db_ = k3.number_input("B", 0, key=f"{ds}b_{uid}")
-                    net = round(dd - (dy / 3), 2)
-                    t_net += net
-                    d_detay[ds] = {"d": dd, "y": dy, "b": db_, "net": net}
-                    st.divider()
-            st.info(f"📌 Toplam Net: {round(t_net, 2)}")
-            if st.button("Deneme Sonucunu Kaydet", key=f"btn_deneme_{uid}"):
-                uv["denemeler"].append({"t": str(dt), "y": yay, "top": round(t_net, 2), "detay": d_detay})
-                veri_kaydet(st.session_state.db)
-                st.success("Deneme eklendi!")
-
-        with t3:
-            st.markdown("### 📚 Kitap Okuma")
-            kad = st.text_input("Kitap Adı", key=f"b_ad_{uid}")
-            kyz = st.text_input("Yazar", key=f"b_yazar_{uid}")
-            ksy = st.number_input("Sayfa Sayısı", 0, key=f"b_sayfa_{uid}")
-            c_b1, c_b2 = st.columns(2)
-            bt = c_b1.date_input("Başlama", key=f"b_basla_{uid}")
-            bit = c_b2.date_input("Bitiş", key=f"b_bitis_{uid}")
-            if st.button("Kitap Ekle", key=f"btn_kitap_{uid}"):
-                uv["kitaplar"].append({"ad":kad, "yz":kyz, "s":ksy, "b":str(bt), "bit":str(bit)})
-                veri_kaydet(st.session_state.db)
-                st.success("Kitap kaydedildi!")
-
-    if st.session_state.role == "student":
-        st.header(f"Merhaba {st.session_state.user}")
-        m = st.radio("Menü", ["Veri Girişi", "Gelişim"], horizontal=True)
-        if m == "Veri Girişi": data_hub(st.session_state.user)
-        else:
-            uv = st.session_state.db["users"][st.session_state.user]
-            if uv.get("kaynaklar"): 
-                st.write("### 📚 Ödevlerim")
-                st.table(pd.DataFrame(uv["kaynaklar"]))
-            if uv.get("denemeler"):
-                df = pd.DataFrame(uv["denemeler"])
-                st.plotly_chart(px.line(df, x="t", y="top", markers=True))
-
-    elif st.session_state.role == "teacher":
-        st.header("Öğretmen Paneli")
-        m = st.sidebar.radio("İşlemler", ["Öğrenci Ekle", "Veri Girişi", "Kaynak Ata", "Raporlar", "Sınav Tarihi Ayarla"])
-        
-        if m == "Öğrenci Ekle":
-            nu, np = st.text_input("Ad"), st.text_input("Şifre")
-            if st.button("Kaydet"):
-                st.session_state.db["users"][nu] = {"password":np, "sorular":[], "denemeler":[], "kitaplar":[], "kaynaklar":[]}
-                veri_kaydet(st.session_state.db); st.success("Tamam")
-        
-        elif m == "Veri Girişi":
-            so = st.selectbox("Seç", list(st.session_state.db["users"].keys()))
-            if so: data_hub(so)
-        
-        elif m == "Kaynak Ata":
-            so = st.selectbox("Öğrenci", list(st.session_state.db["users"].keys()))
-            sd = st.selectbox("Ders", list(DERSLER_KONULAR.keys()))
-            sk = st.selectbox("Konu", DERSLER_KONULAR[sd])
-            r = st.text_input("Kaynak")
-            if st.button("Ata"):
-                st.session_state.db["users"][so]["kaynaklar"].append({"d":sd, "k":sk, "ad":r})
-                veri_kaydet(st.session_state.db); st.success("Atandı")
-        
-        elif m == "Raporlar":
-            sr = st.selectbox("Öğrenci", list(st.session_state.db["users"].keys()))
-            if sr:
-                st.download_button("📄 PDF Analiz İndir", generate_pdf_report(sr, st.session_state.db["users"][sr]), f"{sr}_Karne.pdf")
-        
-        elif m == "Sınav Tarihi Ayarla":
-            st.subheader("📅 LGS Tarihini Değiştir")
-            current_str = st.session_state.db.get("lgs_tarih", VARSAYILAN_TARIH)
-            try:
-                current_date = datetime.datetime.strptime(current_str, "%Y-%m-%d").date()
-            except:
-                current_date = datetime.date.today()
-                
-            new_date = st.date_input("Yeni Sınav Tarihi", current_date)
-            
-            if st.button("Tarihi Güncelle"):
-                st.session_state.db["lgs_tarih"] = str(new_date)
-                veri_kaydet(st.session_state.db)
-                st.success(f"Tarih güncellendi: {new_date}. Sol menüdeki sayaç yenilenecek.")
-                st.rerun()
+                    net
