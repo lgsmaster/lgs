@@ -10,37 +10,15 @@ from github import Github
 # --- 1. SAYFA VE SİSTEM AYARLARI ---
 st.set_page_config(page_title="LGS Master Pro", page_icon="🏆", layout="wide")
 
-# --- GİZLİLİK VE GÜVENLİK (KESİN ÇÖZÜM) ---
-# Bu kod üstteki şeridi silmez (Menü butonu kalsın diye).
-# Sadece sağ taraftaki GitHub ve Ayarlar butonlarını (Toolbar) yok eder.
-st.markdown("""
-    <style>
-        [data-testid="stToolbar"] {
-            visibility: hidden;
-            height: 0%;
-            position: fixed;
-        }
-        [data-testid="stDecoration"] {
-            visibility: hidden;
-        }
-        footer {
-            visibility: hidden;
-        }
-        #MainMenu {
-            visibility: hidden;
-        }
-        header {
-            visibility: hidden;
-        }
-        /* Menü butonunu zorla görünür yap ve yerine sabitle */
-        [data-testid="collapsedControl"] {
-            visibility: visible !important;
-            display: block !important;
-            color: black !important;
-            z-index: 99999;
-        }
-    </style>
-    """, unsafe_allow_html=True)
+# --- GİZLİLİK VE GÜVENLİK (DÜZELTİLDİ) ---
+# Header satırını sildik, artık menü açma butonu kaybolmayacak.
+hide_streamlit_style = """
+            <style>
+            #MainMenu {visibility: hidden;}
+            footer {visibility: hidden;}
+            </style>
+            """
+st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 
 # --- 2. SABİTLER ---
 DB_FILE = "lgs_platinum_db.json"
@@ -214,7 +192,6 @@ def generate_pdf_report(user_name, user_data):
 
 # --- 6. ARAYÜZ VE UYGULAMA ---
 if st.session_state.user is None:
-    st.markdown("<br>", unsafe_allow_html=True)
     st.title("🛡️ LGS Master Pro")
     t1, t2 = st.tabs(["Öğrenci Girişi", "Öğretmen Girişi"])
     with t1:
@@ -245,6 +222,7 @@ else:
     st.sidebar.markdown(f"<div style='background:#d32f2f;color:white;padding:10px;border-radius:5px;text-align:center;'><b>⏳ LGS'YE {days_left} GÜN</b><br><small>{hedef_str}</small></div>", unsafe_allow_html=True)
     st.sidebar.write(f"👤 {st.session_state.user}")
     
+    # MENÜ ÇIKIŞ BUTONU
     if st.sidebar.button("Çıkış"): st.session_state.user = None; st.rerun()
 
     def data_hub(uid):
